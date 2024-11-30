@@ -253,7 +253,8 @@ static void msm_pm_set_timer(uint32_t modified_time_us)
 	ktime_t modified_ktime = ns_to_ktime(modified_time_ns);
 
 	lpm_hrtimer.function = lpm_hrtimer_cb;
-	hrtimer_start(&lpm_hrtimer, modified_ktime, HRTIMER_MODE_REL_PINNED);
+	hrtimer_start(&lpm_hrtimer, modified_ktime,
+		      HRTIMER_MODE_REL_PINNED);
 }
 
 
