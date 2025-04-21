@@ -54,8 +54,8 @@
 	status = "disabled";
 };
 
-&soc {
-	restart@10ac000 {
-		qcom,force-warm-reboot;
-	};
-};
+//&soc {
+//	restart@10ac000 {
+//		qcom,force-warm-reboot;
+//	};
+//};
