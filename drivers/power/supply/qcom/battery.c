@@ -469,6 +469,8 @@ static void get_fcc_split(struct pl_data *chip, int total_ua,
 		*master_ua = max(0, total_ua);
 	else
 		*master_ua = max(0, total_ua - *slave_ua);
+
+    pl_dbg(chip, PR_PARALLEL, "get_fcc_split %d, %d (delta=%d, total_ua=%d, bcl_ua=%d, pl_fcc_max=%d)\n", *master_ua, *slave_ua, hw_cc_delta_ua, total_ua, bcl_ua, chip->pl_fcc_max);
 }
 
 static void get_fcc_stepper_params(struct pl_data *chip, int main_fcc_ua,
@@ -504,16 +506,16 @@ static void get_fcc_stepper_params(struct pl_data *chip, int main_fcc_ua,
 		|| chip->main_step_fcc_count || chip->main_step_fcc_residual)
 		chip->step_fcc = 1;
 
-	pr_debug("Main FCC Stepper parameters: main_step_direction: %d, main_step_count: %d, main_residual_fcc: %d\n",
+	pl_dbg(chip, PR_PARALLEL, "Main FCC Stepper parameters: main_step_direction: %d, main_step_count: %d, main_residual_fcc: %d\n",
 		chip->main_step_fcc_dir, chip->main_step_fcc_count,
 		chip->main_step_fcc_residual);
-	pr_debug("Parallel FCC Stepper parameters: parallel_step_direction: %d, parallel_step_count: %d, parallel_residual_fcc: %d\n",
+	pl_dbg(chip, PR_PARALLEL, "Parallel FCC Stepper parameters: parallel_step_direction: %d, parallel_step_count: %d, parallel_residual_fcc: %d\n",
 		chip->parallel_step_fcc_dir, chip->parallel_step_fcc_count,
 		chip->parallel_step_fcc_residual);
 }
 
-#define MINIMUM_PARALLEL_FCC_UA		500000
-#define PL_TAPER_WORK_DELAY_MS		500
+#define MINIMUM_PARALLEL_FCC_UA		150000
+#define PL_TAPER_WORK_DELAY_MS		1500
 #define TAPER_RESIDUAL_PCT		90
 #define TAPER_REDUCTION_UA		100000
 static void pl_taper_work(struct work_struct *work)
@@ -522,8 +524,20 @@ static void pl_taper_work(struct work_struct *work)
 						pl_taper_work);
 	union power_supply_propval pval = {0, };
 	int rc;
-	int eff_fcc_ua;
+	int eff_fcc_ua, eff_fv;
 	int total_fcc_ua, master_fcc_ua, slave_fcc_ua = 0;
+    int max_fv = 4350000;
+
+
+	rc = power_supply_get_property(chip->batt_psy,
+			       POWER_SUPPLY_PROP_VOLTAGE_MAX, &pval);
+
+    if( rc < 0 ) {
+        pr_err("Can't get battry max voltage rc=%d\n", rc);
+    } else {
+        max_fv = pval.intval;
+        pr_err("Maximum battry voltage is %d\n", max_fv);
+    }
 
 	chip->taper_entry_fv = get_effective_result(chip->fv_votable);
 	chip->taper_work_running = true;
@@ -556,21 +570,39 @@ static void pl_taper_work(struct work_struct *work)
 
 		chip->charge_type = pval.intval;
 		if (pval.intval == POWER_SUPPLY_CHARGE_TYPE_TAPER) {
-			eff_fcc_ua = get_effective_result(chip->fcc_votable);
-			if (eff_fcc_ua < 0) {
-				pr_err("Couldn't get fcc, exiting taper work\n");
-				goto done;
-			}
-			eff_fcc_ua = eff_fcc_ua - TAPER_REDUCTION_UA;
-			if (eff_fcc_ua < 0) {
-				pr_err("Can't reduce FCC any more\n");
-				goto done;
-			}
 
-			pl_dbg(chip, PR_PARALLEL, "master is taper charging; reducing FCC to %dua\n",
-					eff_fcc_ua);
-			vote(chip->fcc_votable, TAPER_STEPPER_VOTER,
-					true, eff_fcc_ua);
+    		eff_fcc_ua = get_effective_result(chip->fcc_votable);
+    		if (eff_fcc_ua < 0) {
+    			pr_err("Couldn't get fcc, exiting taper work\n");
+    			goto done;
+    		}
+
+
+            eff_fv = max_fv;  //get_effective_result(chip->fv_votable); 
+
+        	rc = power_supply_get_property(chip->batt_psy,
+			       POWER_SUPPLY_PROP_VOLTAGE_NOW, &pval);
+
+            if( !rc  ) {
+                eff_fv = pval.intval;
+            }
+            
+            if( eff_fv > max_fv - 5000 ) {
+    			eff_fcc_ua = eff_fcc_ua - TAPER_REDUCTION_UA;
+    			if (eff_fcc_ua < 0) {
+    				pr_err("Can't reduce FCC any more\n");
+    				goto done;
+    			}
+    
+                pl_dbg(chip, PR_PARALLEL, "master is taper charging; reducing FCC to %dua at %dmv to %dmv\n", eff_fcc_ua, eff_fv, max_fv);
+    
+    			vote(chip->fcc_votable, TAPER_STEPPER_VOTER,
+    					true, eff_fcc_ua);
+            } else {
+                pl_dbg(chip, PR_PARALLEL, "Voltage is not on CV. Ignore tapper at %dma %dmv for %dmb\n", eff_fcc_ua, eff_fv, max_fv);
+    			vote(chip->fcc_votable, TAPER_STEPPER_VOTER, false, 9);
+                goto done;
+            }
 		} else {
 			/*
 			 * Due to reduction of float voltage in JEITA condition
@@ -838,6 +870,9 @@ static int pl_fv_vote_callback(struct votable *votable, void *data,
 	struct pl_data *chip = data;
 	union power_supply_propval pval = {0, };
 	int rc = 0;
+    int capacity = 0, status = 0;
+
+    pl_dbg(chip, PR_PARALLEL, "FV voter changed %d\n", fv_uv);
 
 	if (fv_uv < 0)
 		return 0;
@@ -864,27 +899,40 @@ static int pl_fv_vote_callback(struct votable *votable, void *data,
 		}
 	}
 
+
+	rc = power_supply_get_property(chip->batt_psy,
+			POWER_SUPPLY_PROP_CAPACITY, &pval);
+    if( rc < 0 ) {
+	    pr_err("Couldn't get battery capacity rc=%d\n", rc);
+        return rc;
+    }
+
+    capacity = pval.intval;
+
+	rc = power_supply_get_property(chip->batt_psy,
+			POWER_SUPPLY_PROP_STATUS, &pval);
+	if (rc < 0) {
+		pr_err("Couldn't get battery status rc=%d\n", rc);
+        return rc;
+	} 
+
+    status = pval.intval;
+
 	/*
 	 * check for termination at reduced float voltage and re-trigger
 	 * charging if new float voltage is above last FV.
 	 */
-	if ((chip->float_voltage_uv < fv_uv) && is_batt_available(chip)) {
-		rc = power_supply_get_property(chip->batt_psy,
-				POWER_SUPPLY_PROP_STATUS, &pval);
-		if (rc < 0) {
-			pr_err("Couldn't get battery status rc=%d\n", rc);
-		} else {
-			if (pval.intval == POWER_SUPPLY_STATUS_FULL) {
-				pr_debug("re-triggering charging\n");
-				pval.intval = 1;
-				rc = power_supply_set_property(chip->batt_psy,
-					POWER_SUPPLY_PROP_RECHARGE_SOC,
-					&pval);
-				if (rc < 0)
-					pr_err("Couldn't set force recharge rc=%d\n",
-							rc);
-			}
-		}
+	if ( status == POWER_SUPPLY_STATUS_FULL && is_batt_available(chip) &&
+        ( (chip->float_voltage_uv < fv_uv) || 
+          (capacity < 99) ) ) {
+    		pr_info("re-triggering charging\n");
+			pval.intval = 1;
+			rc = power_supply_set_property(chip->batt_psy,
+				POWER_SUPPLY_PROP_RECHARGE_SOC,
+				&pval);
+			if (rc < 0) {
+				pr_err("Couldn't set force recharge rc=%d\n",rc);
+            }
 	}
 
 	chip->float_voltage_uv = fv_uv;
@@ -901,6 +949,8 @@ static int usb_icl_vote_callback(struct votable *votable, void *data,
 	struct pl_data *chip = data;
 	union power_supply_propval pval = {0, };
 	bool rerun_aicl = false;
+
+	pl_dbg(chip, PR_PARALLEL, "ICL voter changed %d\n", icl_ua);
 
 	if (!chip->main_psy)
 		return 0;
@@ -1031,6 +1081,7 @@ static int pl_disable_vote_callback(struct votable *votable,
 	}
 
 	total_fcc_ua = get_effective_result_locked(chip->fcc_votable);
+    pl_dbg(chip, PR_PARALLEL, "total_fcc_ua = %d", total_fcc_ua);
 
 	if (chip->pl_mode != POWER_SUPPLY_PL_NONE && !pl_disable) {
 		/* keep system awake to talk to slave charger through i2c */
@@ -1042,7 +1093,7 @@ static int pl_disable_vote_callback(struct votable *votable,
 			return rc;
 
 		if (disable) {
-			pr_info("Parallel ICL is less than min ICL(%d), skipping parallel enable\n",
+			pl_dbg(chip, PR_PARALLEL, "Parallel ICL is less than min ICL(%d), skipping parallel enable\n",
 					chip->pl_min_icl_ua);
 			return 0;
 		}

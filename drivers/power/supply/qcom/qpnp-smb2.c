@@ -37,28 +37,28 @@ static struct smb_params v1_params = {
 		.name	= "fast charge current",
 		.reg	= FAST_CHARGE_CURRENT_CFG_REG,
 		.min_u	= 0,
-		.max_u	= 4000000,
+		.max_u	= 3800000,
 		.step_u	= 25000,
 	},
 	.fv			= {
 		.name	= "float voltage",
 		.reg	= FLOAT_VOLTAGE_CFG_REG,
 		.min_u	= 3487500,
-		.max_u	= 4400000,
+		.max_u	= 4410000,
 		.step_u	= 7500,
 	},
 	.usb_icl		= {
 		.name	= "usb input current limit",
 		.reg	= USBIN_CURRENT_LIMIT_CFG_REG,
 		.min_u	= 0,
-		.max_u	= 4000000,
+		.max_u	= 3000000,
 		.step_u	= 25000,
 	},
 	.icl_stat		= {
 		.name	= "input current limit status",
 		.reg	= ICL_STATUS_REG,
 		.min_u	= 0,
-		.max_u	= 4800000,
+		.max_u	= 6000000,
 		.step_u	= 25000,
 	},
 	.otg_cl			= {
@@ -93,35 +93,35 @@ static struct smb_params v1_params = {
 		.name	= "dc icl div2 <5.5V",
 		.reg	= ZIN_ICL_LV_REG,
 		.min_u	= 0,
-		.max_u	= 4000000,
+		.max_u	= 3000000,
 		.step_u	= 25000,
 	},
 	.dc_icl_div2_mid_lv	= {
 		.name	= "dc icl div2 5.5-6.5V",
 		.reg	= ZIN_ICL_MID_LV_REG,
 		.min_u	= 0,
-		.max_u	= 4000000,
+		.max_u	= 3000000,
 		.step_u	= 25000,
 	},
 	.dc_icl_div2_mid_hv	= {
 		.name	= "dc icl div2 6.5-8.0V",
 		.reg	= ZIN_ICL_MID_HV_REG,
 		.min_u	= 0,
-		.max_u	= 4000000,
+		.max_u	= 3000000,
 		.step_u	= 25000,
 	},
 	.dc_icl_div2_hv		= {
 		.name	= "dc icl div2 >8.0V",
 		.reg	= ZIN_ICL_HV_REG,
 		.min_u	= 0,
-		.max_u	= 4000000,
+		.max_u	= 3000000,
 		.step_u	= 25000,
 	},
 	.jeita_cc_comp		= {
 		.name	= "jeita fcc reduction",
 		.reg	= JEITA_CCCOMP_CFG_REG,
 		.min_u	= 0,
-		.max_u	= 4000000,
+		.max_u	= 3800000,
 		.step_u	= 25000,
 	},
 	.jeita_fv_comp		= {
@@ -196,7 +196,7 @@ module_param_named(
 	debug_mask, __debug_mask, int, 0600
 );
 
-static int __weak_chg_icl_ua = 500000;
+static int __weak_chg_icl_ua = 900000;
 module_param_named(
 	weak_chg_icl_ua, __weak_chg_icl_ua, int, 0600);
 
@@ -1323,6 +1323,7 @@ static int smb2_init_wireless_psy(struct smb2 *chip)
  *************************/
 
 static enum power_supply_property smb2_batt_props[] = {
+	POWER_SUPPLY_PROP_CHARGING_ENABLED,
 	POWER_SUPPLY_PROP_INPUT_SUSPEND,
 	POWER_SUPPLY_PROP_STATUS,
 	POWER_SUPPLY_PROP_HEALTH,
@@ -1379,6 +1380,9 @@ static int smb2_batt_get_prop(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_PRESENT:
 		rc = smblib_get_prop_batt_present(chg, val);
+		break;
+	case POWER_SUPPLY_PROP_CHARGING_ENABLED:
+		val->intval = !get_effective_result(chg->chg_disable_votable);
 		break;
 	case POWER_SUPPLY_PROP_INPUT_SUSPEND:
 		rc = smblib_get_prop_input_suspend(chg, val);
@@ -1516,6 +1520,9 @@ static int smb2_batt_set_prop(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_STATUS:
 		rc = smblib_set_prop_batt_status(chg, val);
 		break;
+	case POWER_SUPPLY_PROP_CHARGING_ENABLED:
+		vote(chg->chg_disable_votable, USER_VOTER, !!!val->intval, 0);
+		break;
 	case POWER_SUPPLY_PROP_INPUT_SUSPEND:
 		rc = smblib_set_prop_input_suspend(chg, val);
 		break;
@@ -1532,8 +1539,8 @@ static int smb2_batt_set_prop(struct power_supply *psy,
 		vote(chg->pl_disable_votable, USER_VOTER, (bool)val->intval, 0);
 		break;
 	case POWER_SUPPLY_PROP_VOLTAGE_MAX:
-		chg->batt_profile_fv_uv = val->intval;
-		vote(chg->fv_votable, BATT_PROFILE_VOTER, true, val->intval);
+		//chg->batt_profile_fv_uv = val->intval;
+		vote(chg->fv_votable, BATT_PROFILE_VOTER, true, chg->batt_profile_fv_uv);
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_QNOVO_ENABLE:
 		rc = smblib_set_prop_charge_qnovo_enable(chg, val);
@@ -1611,6 +1618,7 @@ static int smb2_batt_prop_is_writeable(struct power_supply *psy,
 {
 	switch (psp) {
 	case POWER_SUPPLY_PROP_STATUS:
+	case POWER_SUPPLY_PROP_CHARGING_ENABLED:
 	case POWER_SUPPLY_PROP_INPUT_SUSPEND:
 	case POWER_SUPPLY_PROP_SYSTEM_TEMP_LEVEL:
 	case POWER_SUPPLY_PROP_CAPACITY:
@@ -2064,7 +2072,7 @@ static int smb2_init_hw(struct smb2 *chip)
 	/* Operate the QC3.0 to limit vbus to 6.6v*/
 	rc = smblib_masked_write(chg, HVDCP_PULSE_COUNT_MAX_REG,
 				 PULSE_COUNT_QC3P0_mask,
-				 0x7);
+				 0xf);
 	if (rc < 0) {
 		dev_err(chg->dev,
 			"Couldn't configure QC3.0 to 6.6V rc=%d\n", rc);

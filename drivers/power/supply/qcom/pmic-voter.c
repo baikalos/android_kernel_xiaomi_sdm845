@@ -449,11 +449,19 @@ int rerun_election(struct votable *votable)
 
 	lock_votable(votable);
 	effective_result = get_effective_result_locked(votable);
-	if (votable->callback)
+	if (votable->callback) {
+
+		pr_info("%s: effective vote is %d voted by %s, %d\n",
+                votable->name, effective_result,
+				get_client_str(votable, votable->effective_client_id),
+				votable->effective_client_id);
+
+
 		rc = votable->callback(votable,
 			votable->data,
 			effective_result,
 			get_client_str(votable, votable->effective_client_id));
+    }
 	unlock_votable(votable);
 	return rc;
 }

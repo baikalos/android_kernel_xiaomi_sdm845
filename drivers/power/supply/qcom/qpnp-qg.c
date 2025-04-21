@@ -1882,7 +1882,7 @@ static const struct power_supply_desc qg_psy_desc = {
 	.property_is_writeable = qg_property_is_writeable,
 };
 
-#define DEFAULT_RECHARGE_SOC 95
+#define DEFAULT_RECHARGE_SOC 99
 static int qg_charge_full_update(struct qpnp_qg *chip)
 {
 	union power_supply_propval prop = {0, };
