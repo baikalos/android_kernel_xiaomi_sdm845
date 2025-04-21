@@ -35,13 +35,13 @@ config IOSCHED_CFQ
 config CFQ_GROUP_IOSCHED
 	bool "CFQ Group Scheduling support"
 	depends on IOSCHED_CFQ && BLK_CGROUP
-	default n
+	default y
 	---help---
 	  Enable group IO scheduling in CFQ.
 
 choice
 	prompt "Default I/O scheduler"
-	default DEFAULT_CFQ
+	default DEFAULT_NOOP
 	help
 	  Select the I/O scheduler which will be used by default for all
 	  block devices.
