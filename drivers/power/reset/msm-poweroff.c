@@ -59,6 +59,8 @@ static phys_addr_t tcsr_boot_misc_detect;
 static void scm_disable_sdi(void);
 static bool force_warm_reboot;
 
+module_param(force_warm_reboot, bool, 0664);
+
 #ifdef CONFIG_QCOM_DLOAD_MODE
 /* Runtime could be only changed value once.
  * There is no API from TZ to re-enable the registers.
@@ -302,6 +304,8 @@ static void msm_restart_prepare(const char *cmd)
 		need_warm_reset = (get_dload_mode() ||
 				(cmd != NULL && cmd[0] != '\0'));
 	}
+
+    need_warm_reset |= in_panic;
 
 	if (force_warm_reboot)
 		pr_info("Forcing a warm reset of the system\n");
@@ -695,8 +699,8 @@ skip_sysfs_create:
 	if (!download_mode)
 		scm_disable_sdi();
 
-	force_warm_reboot = of_property_read_bool(dev->of_node,
-						"qcom,force-warm-reboot");
+	force_warm_reboot = false; //of_property_read_bool(dev->of_node,
+						//"qcom,force-warm-reboot");
 
 	return 0;
 
