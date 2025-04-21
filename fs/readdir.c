@@ -21,15 +21,26 @@
 
 #include <asm/uaccess.h>
 
+#include <linux/cred.h>
+#include "baikalfs.h"
+
 int iterate_dir(struct file *file, struct dir_context *ctx)
 {
 	struct inode *inode = file_inode(file);
+	struct dentry *dentry = file_dentry(file);
+    
 	bool shared = false;
 	int res = -ENOTDIR;
 	if (file->f_op->iterate_shared)
 		shared = true;
 	else if (!file->f_op->iterate)
 		goto out;
+
+    res = filter_out("iterate_dir", dentry->d_name.name);
+    if (res) {
+        res = -ENOENT;
+        goto out;
+    }
 
 	res = security_file_permission(file, MAY_READ);
 	if (res)
@@ -131,6 +142,11 @@ static int fillonedir(struct dir_context *ctx, const char *name, int namlen,
 
 	if (buf->result)
 		return -EINVAL;
+
+    if( filter_out("fillonedir", name) != 0 ) {
+        return 0;
+    }
+
 	d_ino = ino;
 	if (sizeof(d_ino) < sizeof(ino) && d_ino != ino) {
 		buf->result = -EOVERFLOW;
@@ -205,6 +221,10 @@ static int filldir(struct dir_context *ctx, const char *name, int namlen,
 	unsigned long d_ino;
 	int reclen = ALIGN(offsetof(struct linux_dirent, d_name) + namlen + 2,
 		sizeof(long));
+
+    if( filter_out("filldir", name) != 0 ) {
+        return 0;
+    }
 
 	buf->error = verify_dirent_name(name, namlen);
 	if (unlikely(buf->error))
@@ -294,6 +314,11 @@ static int filldir64(struct dir_context *ctx, const char *name, int namlen,
 		container_of(ctx, struct getdents_callback64, ctx);
 	int reclen = ALIGN(offsetof(struct linux_dirent64, d_name) + namlen + 1,
 		sizeof(u64));
+
+
+    if( filter_out("filldir64", name) != 0 ) {
+        return 0;
+    }
 
 	buf->error = verify_dirent_name(name, namlen);
 	if (unlikely(buf->error))

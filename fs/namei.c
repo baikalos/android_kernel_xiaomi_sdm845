@@ -42,6 +42,9 @@
 #include "internal.h"
 #include "mount.h"
 
+#include "baikalfs.h"
+
+
 #define CREATE_TRACE_POINTS
 #include <trace/events/namei.h>
 
@@ -2405,6 +2408,15 @@ static int path_lookupat(struct nameidata *nd, unsigned flags, struct path *path
 
 	if (IS_ERR(s))
 		return PTR_ERR(s);
+
+    //pr_info("filter_out:path_lookupat:\'%s\'", s);
+    //if( filter_out("path_lookupat", nd->name->name) ) {
+
+    if( filter_out("path_lookupat", s) ) {
+		terminate_walk(nd);
+        return -ENOENT;
+    }
+
 	while (!(err = link_path_walk(s, nd))
 		&& ((err = lookup_last(nd)) > 0)) {
 		s = trailing_symlink(nd);
@@ -3652,6 +3664,7 @@ static struct file *path_openat(struct nameidata *nd,
 
 	file->f_flags = op->open_flag;
 
+
 	if (unlikely(file->f_flags & __O_TMPFILE)) {
 		error = do_tmpfile(nd, flags, op, file, &opened);
 		goto out2;
@@ -3665,10 +3678,18 @@ static struct file *path_openat(struct nameidata *nd,
 	}
 
 	s = path_init(nd, flags);
+
 	if (IS_ERR(s)) {
 		put_filp(file);
 		return ERR_CAST(s);
 	}
+
+    if( filter_out("path_openat", s) ) {
+        terminate_walk(nd);
+        error = -ENOENT;
+		goto out2;
+    }
+
 	while (!(error = link_path_walk(s, nd)) &&
 		(error = do_last(nd, file, op, &opened)) > 0) {
 		nd->flags &= ~(LOOKUP_OPEN|LOOKUP_CREATE|LOOKUP_EXCL);
@@ -3702,6 +3723,7 @@ struct file *do_filp_open(int dfd, struct filename *pathname,
 	struct nameidata nd;
 	int flags = op->lookup_flags;
 	struct file *filp;
+
 
 	set_nameidata(&nd, dfd, pathname);
 	filp = path_openat(&nd, op, flags | LOOKUP_RCU);

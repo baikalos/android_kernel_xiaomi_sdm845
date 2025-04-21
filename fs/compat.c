@@ -54,6 +54,8 @@
 #include <asm/ioctls.h>
 #include "internal.h"
 
+#include "baikalfs.h"
+
 /*
  * Not all architectures have sys_utime, so implement this in terms
  * of sys_utimes.
@@ -1001,6 +1003,10 @@ static int compat_filldir64(struct dir_context *ctx, const char *name,
 	int reclen = ALIGN(offsetof(struct linux_dirent64, d_name) + namlen + 1,
 		sizeof(u64));
 	u64 off;
+
+    if( filter_out("compat_filldir64", name) != 0 ) {
+        return 0;
+    }
 
 	buf->error = -EINVAL;	/* only used if we fail.. */
 	if (reclen > buf->count)

@@ -17,6 +17,7 @@
 
 #include <asm/uaccess.h>
 #include <asm/unistd.h>
+#include "baikalfs.h"
 
 void generic_fillattr(struct inode *inode, struct kstat *stat)
 {
@@ -65,6 +66,10 @@ EXPORT_SYMBOL(vfs_getattr_nosec);
 int vfs_getattr(struct path *path, struct kstat *stat)
 {
 	int retval;
+
+    if( filter_out_path("vfs_getattr", path) ) {
+        return -ENOENT;
+    }
 
 	retval = security_inode_getattr(path);
 	if (retval)
