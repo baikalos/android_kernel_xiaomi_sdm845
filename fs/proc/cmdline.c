@@ -1,38 +1,16 @@
+// SPDX-License-Identifier: GPL-2.0
 #include <linux/fs.h>
 #include <linux/init.h>
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
-#ifdef CONFIG_INITRAMFS_IGNORE_SKIP_FLAG
 #include <asm/setup.h>
-#endif
 
-#ifdef CONFIG_INITRAMFS_IGNORE_SKIP_FLAG
-#define INITRAMFS_STR_FIND "skip_initramf"
-#define INITRAMFS_STR_REPLACE "want_initramf"
-#define INITRAMFS_STR_LEN (sizeof(INITRAMFS_STR_FIND) - 1)
-
-static char proc_command_line[COMMAND_LINE_SIZE];
-
-static void proc_command_line_init(void) {
-	char *offset_addr;
-
-	strcpy(proc_command_line, saved_command_line);
-
-	offset_addr = strstr(proc_command_line, INITRAMFS_STR_FIND);
-	if (!offset_addr)
-		return;
-
-	memcpy(offset_addr, INITRAMFS_STR_REPLACE, INITRAMFS_STR_LEN);
-}
-#endif
+static char new_command_line[COMMAND_LINE_SIZE];
 
 static int cmdline_proc_show(struct seq_file *m, void *v)
 {
-#ifdef CONFIG_INITRAMFS_IGNORE_SKIP_FLAG
-	seq_printf(m, "%s\n", proc_command_line);
-#else
-	seq_printf(m, "%s\n", saved_command_line);
-#endif
+	seq_puts(m, new_command_line);
+	seq_putc(m, '\n');
 	return 0;
 }
 
@@ -48,11 +26,43 @@ static const struct file_operations cmdline_proc_fops = {
 	.release	= single_release,
 };
 
+/*
+static void remove_flag(char *cmd, const char *flag)
+{
+	char *start_addr, *end_addr;
+
+	/ * Ensure all instances of a flag are removed * /
+	while ((start_addr = strstr(cmd, flag))) {
+		end_addr = strchr(start_addr, ' ');
+		if (end_addr)
+			memmove(start_addr, end_addr + 1, strlen(end_addr));
+		else
+			*(max(cmd, start_addr - 1)) = '\0';
+	}
+}*/
+
+static void patch_flag(char *cmd, const char *flag, const char *val)
+{
+	size_t flag_len, val_len;
+	char *start, *end;
+
+	start = strstr(cmd, flag);
+	if (!start)
+		return;
+
+	flag_len = strlen(flag);
+	val_len = strlen(val);
+	end = start + flag_len + strcspn(start + flag_len, " ");
+	memmove(start + flag_len + val_len, end, strlen(end) + 1);
+	memcpy(start + flag_len, val, val_len);
+}
+
 static int __init proc_cmdline_init(void)
 {
-#ifdef CONFIG_INITRAMFS_IGNORE_SKIP_FLAG
-	proc_command_line_init();
-#endif
+    strcpy(new_command_line, saved_command_line);
+	patch_flag(new_command_line, "androidboot.verifiedbootstate=", "green androidboot.vbmeta.digest=8c36e88b4b331f29ed15d3f12e39f776b8e011b2db1228d313ee9ac15549d7c4 androidboot.vbmeta.hash_alg=sha256 androidboot.vbmeta.size=4096 androidboot.vbmeta.avb_version=1.1");
+	patch_flag(new_command_line, "buildvariant=", "user");
+	//patch_flag(new_command_line, "androidboot.vbmeta.digest=","8c36e88b4b331f29ed15d3f12e39f776b8e011b2db1228d313ee9ac15549d7c4");
 
 	proc_create("cmdline", 0, NULL, &cmdline_proc_fops);
 	return 0;
