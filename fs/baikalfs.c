@@ -114,10 +114,10 @@ static const char* bl_list_mount_types[] = {
     NULL
 };
 
-static const char* bl_list_mounts_add[] = {
-	"/apex/",
-    NULL
-};
+//static const char* bl_list_mounts_add[] = {
+//	/*"/apex/",*/
+//    NULL
+//};
 
 
 static const char* bl_list_mounts[] = {
@@ -166,7 +166,6 @@ static const char *bl_list_ends[] = {
 };
 
 static const char *bl_list_contains[] = {
-    "adbd",
     "zygisk",
     "magisk",
     "system/addon.d",
@@ -385,6 +384,8 @@ int filter_out_mount(const char *tag, struct vfsmount* const mnt, const struct p
 	char* ptr = NULL;
 	char* end = NULL;
 
+    if( !mnt || !root ) return 0;
+
 	struct path mnt_path = {
 		.dentry = mnt->mnt_root,
 		.mnt = mnt
@@ -439,7 +440,7 @@ int filter_out_mount(const char *tag, struct vfsmount* const mnt, const struct p
     }
 
 
-    if( !res && is_add_uid(get_cur_uid()) ) res = check_list(bl_list_mounts_add,path,0);
+    //if( !res && is_add_uid(get_cur_uid()) ) res = check_list(bl_list_mounts_add,path,0);
 
     if (res) {
         pr_info("filter_out_mount blocked from %s name=%s (%d)", tag, path, get_cur_uid());
