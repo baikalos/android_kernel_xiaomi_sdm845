@@ -2006,9 +2006,12 @@ int smblib_vbus_regulator_is_enabled(struct regulator_dev *rdev)
 int smblib_get_prop_input_suspend(struct smb_charger *chg,
 				  union power_supply_propval *val)
 {
-	val->intval
+	/*val->intval
 		= (get_client_vote(chg->usb_icl_votable, USER_VOTER) == 0)
-		 || get_client_vote(chg->dc_suspend_votable, USER_VOTER);
+		 || get_client_vote(chg->dc_suspend_votable, USER_VOTER);*/
+
+    val->intval = is_client_vote_enabled(chg->chg_disable_votable, USER_VOTER);
+
 	return 0;
 }
 
@@ -2397,22 +2400,32 @@ int smblib_set_prop_input_suspend(struct smb_charger *chg,
 {
 	int rc;
 
-	/* vote 0mA when suspended */
+	rc = vote(chg->chg_disable_votable, USER_VOTER, (bool)val->intval, 0);
+	if (rc < 0) {
+		smblib_err(chg, "Couldn't vote to %s USB rc=%d\n",
+			(bool)val->intval ? "suspend" : "resume", rc);
+		return rc;
+	}
+
+    /*
+	/ * vote 0mA when suspended * /
 	rc = vote(chg->usb_icl_votable, USER_VOTER, (bool)val->intval, 0);
 	if (rc < 0) {
 		smblib_err(chg, "Couldn't vote to %s USB rc=%d\n",
 			(bool)val->intval ? "suspend" : "resume", rc);
 		return rc;
 	}
-/*
+
 	rc = vote(chg->dc_suspend_votable, USER_VOTER, (bool)val->intval, 0);
 	if (rc < 0) {
 		smblib_err(chg, "Couldn't vote to %s DC rc=%d\n",
 			(bool)val->intval ? "suspend" : "resume", rc);
 		return rc;
 	}
-*/
+
 	smblib_wireless_set_enable(chg, !val->intval);
+    */
+
 
 	power_supply_changed(chg->batt_psy);
 	return rc;
