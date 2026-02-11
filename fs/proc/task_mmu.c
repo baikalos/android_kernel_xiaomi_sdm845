@@ -23,6 +23,8 @@
 #include <asm/tlbflush.h>
 #include "internal.h"
 
+#include "../baikalfs.h"
+
 void task_mem(struct seq_file *m, struct mm_struct *mm)
 {
 	unsigned long text, lib, swap, ptes, pmds, anon, file, shmem;
@@ -386,6 +388,17 @@ show_map_vma(struct seq_file *m, struct vm_area_struct *vma, int is_pid)
 		name = vma->vm_ops->name(vma);
 		if (name)
 			goto done;
+	}
+
+	if (file) {
+        if( !filter_out_path_vma( "show_map_vma", &file->f_path) ) {
+    		seq_pad(m, ' ');
+	    	seq_file_path(m, file, "\n");
+            goto done;
+        } else {
+            name = "[naik]";
+            goto done;
+        }
 	}
 
 	name = arch_vma_name(vma);
