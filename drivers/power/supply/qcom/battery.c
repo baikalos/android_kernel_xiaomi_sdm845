@@ -1451,6 +1451,9 @@ static int pl_disable_vote_callback(struct votable *votable,
 				&slave_fcc_ua);
 
 		if (chip->fcc_stepper_enable) {
+
+    	    pr_info("get_fcc_stepper_params total_fcc_ua=%d, master_fcc_ua=%d, slave_fcc_ua=%d", total_fcc_ua, master_fcc_ua, slave_fcc_ua);
+
 			get_fcc_stepper_params(chip, master_fcc_ua,
 					slave_fcc_ua);
 			if (chip->step_fcc) {
@@ -1469,6 +1472,9 @@ static int pl_disable_vote_callback(struct votable *votable,
 			 *	Set slave ICL then main FCC.
 			 */
 			if (slave_fcc_ua > chip->slave_fcc_ua) {
+
+			    pr_info("MAIN_FCC_VOTER master_fcc_ua=%d", master_fcc_ua);
+
 				vote(chip->fcc_main_votable, MAIN_FCC_VOTER,
 							true, master_fcc_ua);
 				pval.intval = slave_fcc_ua;
@@ -1492,6 +1498,8 @@ static int pl_disable_vote_callback(struct votable *votable,
 						rc);
 					return rc;
 				}
+
+			    pr_info("MAIN_FCC_VOTER (2) master_fcc_ua=%d", master_fcc_ua);
 
 				chip->slave_fcc_ua = slave_fcc_ua;
 				vote(chip->fcc_main_votable, MAIN_FCC_VOTER,
@@ -1555,6 +1563,8 @@ static int pl_disable_vote_callback(struct votable *votable,
 					pr_err("Couldn't change slave suspend state rc=%d\n",
 						rc);
 			}
+
+		    pr_info("MAIN_FCC_VOTER total_fcc_ua=%d", total_fcc_ua);
 
 			/* main psy gets all share */
 			vote(chip->fcc_main_votable, MAIN_FCC_VOTER, true,

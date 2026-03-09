@@ -29,7 +29,7 @@ static struct smb_params v1_params = {
 		.reg	= FAST_CHARGE_CURRENT_CFG_REG,
 		.min_u	= 0,
 #if defined(CONFIG_MACH_XIAOMI_SDM845)
-		.max_u	= 3300000,
+		.max_u	= 3800000,
 #else
 		.max_u	= 4500000,
 #endif
@@ -61,7 +61,7 @@ static struct smb_params v1_params = {
 		.name	= "input current limit status",
 		.reg	= ICL_STATUS_REG,
 		.min_u	= 0,
-		.max_u	= 4800000,
+		.max_u	= 3000000,
 		.step_u	= 25000,
 	},
 	.otg_cl			= {
@@ -69,7 +69,7 @@ static struct smb_params v1_params = {
 		.reg	= OTG_CURRENT_LIMIT_CFG_REG,
 		.min_u	= 250000,
 #if defined(CONFIG_MACH_XIAOMI_SDM845)
-		.max_u	= 1500000,
+		.max_u	= 2000000,
 #else
 		.max_u	= 2000000,
 #endif
@@ -294,6 +294,8 @@ ATTRIBUTE_GROUPS(smb2);
 #define BITE_WDOG_TIMEOUT_8S		0x3
 #define BARK_WDOG_TIMEOUT_MASK		GENMASK(3, 2)
 #define BARK_WDOG_TIMEOUT_SHIFT		2
+#define DEFAULT_FCC_STEP_SIZE_UA	100000
+#define DEFAULT_FCC_STEP_UPDATE_DELAY_MS	1000
 static int smb2_parse_dt(struct smb2 *chip)
 {
 	struct smb_charger *chg = &chip->chg;
@@ -564,6 +566,18 @@ static int smb2_parse_dt(struct smb2 *chip)
 
 	chg->ufp_only_mode = of_property_read_bool(node,
 					"qcom,ufp-only-mode");
+
+	of_property_read_u32(node, "qcom,fcc-step-delay-ms",
+					&chg->chg_param.fcc_step_delay_ms);
+	if (chg->chg_param.fcc_step_delay_ms <= 0)
+		chg->chg_param.fcc_step_delay_ms =
+					DEFAULT_FCC_STEP_UPDATE_DELAY_MS;
+
+	of_property_read_u32(node, "qcom,fcc-step-size-ua",
+					&chg->chg_param.fcc_step_size_ua);
+	if (chg->chg_param.fcc_step_size_ua <= 0)
+		chg->chg_param.fcc_step_size_ua = DEFAULT_FCC_STEP_SIZE_UA;
+
 
 	return 0;
 }
@@ -1210,7 +1224,7 @@ static int smb2_dc_get_prop(struct power_supply *psy,
 }
 
 #if defined(CONFIG_MACH_XIAOMI_SDM845)
-#define DCIN_DEFUALT_CURRENT 500000
+#define DCIN_DEFUALT_CURRENT 900000
 static int smb2_set_wireless_dc_icl(struct smb_charger *chg,
 				const union power_supply_propval *val)
 {
@@ -2058,7 +2072,7 @@ static int smb2_disable_typec(struct smb_charger *chg)
 
 	/* wait for FSM to start */
 #if defined(CONFIG_MACH_XIAOMI_SDM845)
-	msleep(120);
+	msleep(150);
 #else
 	msleep(100);
 #endif
