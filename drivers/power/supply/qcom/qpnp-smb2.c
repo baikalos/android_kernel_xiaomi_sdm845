@@ -29,7 +29,7 @@ static struct smb_params v1_params = {
 		.reg	= FAST_CHARGE_CURRENT_CFG_REG,
 		.min_u	= 0,
 #if defined(CONFIG_MACH_XIAOMI_SDM845)
-		.max_u	= 3300000,
+		.max_u	= 3800000,
 #else
 		.max_u	= 4500000,
 #endif
