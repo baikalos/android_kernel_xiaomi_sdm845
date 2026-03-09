@@ -579,11 +579,13 @@ static int gf_open(struct inode *inode, struct file *filp)
 			}
 			gpio_direction_input(gf_dev->irq_gpio);
 
+
 			rc = request_threaded_irq(gf_dev->irq, NULL, gf_irq,
-					IRQF_TRIGGER_RISING | IRQF_ONESHOT,
+					IRQF_TRIGGER_RISING | IRQF_ONESHOT | IRQF_NO_SUSPEND,
 					"gf", gf_dev);
 
 			if (!rc) {
+        		device_init_wakeup(&(gf_dev->spi->dev), 1);
 				enable_irq_wake(gf_dev->irq);
 				gf_dev->irq_enabled = 1;
 				gf_disable_irq(gf_dev);
@@ -796,9 +798,8 @@ static int gf_probe(struct platform_device *pdev)
 	 */
 	mutex_lock(&device_list_lock);
 	minor = find_first_zero_bit(minors, N_SPI_MINORS);
-	if (minor < N_SPI_MINORS) {
-		struct device *dev;
 
+	if (minor < N_SPI_MINORS) {
 		gf_dev->devt = MKDEV(SPIDEV_MAJOR, minor);
 		dev = device_create(gf_class, &gf_dev->spi->dev, gf_dev->devt,
 				gf_dev, GF_DEV_NAME);

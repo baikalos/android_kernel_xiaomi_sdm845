@@ -504,14 +504,9 @@ static int dsi_panel_power_on(struct dsi_panel *panel)
 	int rc = 0;
 
 #if defined(CONFIG_MACH_XIAOMI_SDM845)
-	if (!panel->tddi_doubleclick_flag) {
-		rc = dsi_pwr_enable_regulator(&panel->power_info, true);
-	} else {
+	if (!panel->tddi_doubleclick_flag)
 #endif
 	rc = dsi_pwr_enable_regulator(&panel->power_info, true);
-#if defined(CONFIG_MACH_XIAOMI_SDM845)
-	}
-#endif
 	if (rc) {
 		DSI_ERR("[%s] failed to enable vregs, rc=%d\n",
 				panel->name, rc);
@@ -558,20 +553,19 @@ static int dsi_panel_power_off(struct dsi_panel *panel)
 {
 	int rc = 0;
 
+#if defined(CONFIG_MACH_XIAOMI_SDM845)
+	if (!panel->tddi_doubleclick_flag)
+	if (gpio_is_valid(panel->reset_config.reset_gpio))
+		gpio_set_value(panel->reset_config.reset_gpio, 0);
+#endif
+
 	if (gpio_is_valid(panel->reset_config.disp_en_gpio))
 		gpio_set_value(panel->reset_config.disp_en_gpio, 0);
 
-#if defined(CONFIG_MACH_XIAOMI_SDM845)
-	if (!panel->tddi_doubleclick_flag) {
-		if (gpio_is_valid(panel->reset_config.reset_gpio))
-			gpio_set_value(panel->reset_config.reset_gpio, 0);
-	} else {
-#endif
+#if !defined(CONFIG_MACH_XIAOMI_SDM845)
 	if (gpio_is_valid(panel->reset_config.reset_gpio) &&
 					!panel->reset_gpio_always_on)
 		gpio_set_value(panel->reset_config.reset_gpio, 0);
-#if defined(CONFIG_MACH_XIAOMI_SDM845)
-	}
 #endif
 
 	if (gpio_is_valid(panel->reset_config.lcd_mode_sel_gpio))
@@ -591,20 +585,12 @@ static int dsi_panel_power_off(struct dsi_panel *panel)
 	}
 
 #if defined(CONFIG_MACH_XIAOMI_SDM845)
-	if(!panel->tddi_doubleclick_flag) {
-		rc = dsi_pwr_enable_regulator(&panel->power_info, false);
-		if (rc)
-			DSI_ERR("[%s] failed to enable vregs, rc=%d\n",
-					panel->name, rc);
-	} else {
+	if(!panel->tddi_doubleclick_flag)
 #endif
 	rc = dsi_pwr_enable_regulator(&panel->power_info, false);
 	if (rc)
 		DSI_ERR("[%s] failed to enable vregs, rc=%d\n",
 				panel->name, rc);
-#if defined(CONFIG_MACH_XIAOMI_SDM845)
-	}
-#endif
 
 	return rc;
 }
@@ -3786,7 +3772,6 @@ static int dsi_panel_parse_mi_config(struct dsi_panel *panel,
 
 	panel->dsi_panel_off_mode = false;
 	panel->fod_hbm_enabled = false;
-	panel->tddi_doubleclick_flag = false;
 
 	return rc;
 }
@@ -3912,6 +3897,9 @@ struct dsi_panel *dsi_panel_get(struct device *parent,
 	if (rc)
 		DSI_DEBUG("failed to parse esd config, rc=%d\n", rc);
 
+#if defined(CONFIG_MACH_XIAOMI_SDM845)
+	panel->tddi_doubleclick_flag = false;
+#endif
 	panel->power_mode = SDE_MODE_DPMS_OFF;
 	drm_panel_init(&panel->drm_panel);
 	panel->drm_panel.dev = &panel->mipi_device.dev;

@@ -1350,7 +1350,7 @@ int freeze_secondary_cpus(int primary)
 	 */
 	cpumask_clear(frozen_cpus);
 
-	pr_info("Disabling non-boot CPUs ...\n");
+	//pr_info("Disabling non-boot CPUs ...\n");
 	for_each_online_cpu(cpu) {
 		if (cpu == primary)
 			continue;
@@ -1372,10 +1372,10 @@ int freeze_secondary_cpus(int primary)
 		}
 	}
 
-	if (!error)
+	/*if (!error)
 		BUG_ON(num_online_cpus() > 1);
 	else
-		pr_err("Non-boot CPUs are not disabled\n");
+		pr_err("Non-boot CPUs are not disabled\n");*/
 
 	/*
 	 * Make sure the CPUs won't be enabled by someone else. We need to do
@@ -1407,7 +1407,7 @@ void enable_nonboot_cpus(void)
 	if (cpumask_empty(frozen_cpus))
 		goto out;
 
-	pr_info("Enabling non-boot CPUs ...\n");
+	//pr_info("Enabling non-boot CPUs ...\n");
 
 	arch_enable_nonboot_cpus_begin();
 
@@ -1416,7 +1416,7 @@ void enable_nonboot_cpus(void)
 		error = _cpu_up(cpu, 1, CPUHP_ONLINE);
 		trace_suspend_resume(TPS("CPU_ON"), cpu, false);
 		if (!error) {
-			pr_info("CPU%d is up\n", cpu);
+			//pr_info("CPU%d is up\n", cpu);
 			cpu_device = get_cpu_device(cpu);
 			if (!cpu_device)
 				pr_err("%s: failed to get cpu%d device\n",

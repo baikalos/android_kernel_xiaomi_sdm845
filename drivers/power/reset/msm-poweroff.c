@@ -72,7 +72,7 @@ static bool dload_mode_enabled;
 static void *emergency_dload_mode_addr;
 static bool scm_dload_supported;
 
-static bool force_warm_reboot;
+static bool force_warm_reboot = true;
 
 /* interface for exporting attributes */
 struct reset_attribute {
@@ -466,7 +466,7 @@ static void halt_spmi_pmic_arbiter(void)
 
 static void msm_restart_prepare(const char *cmd)
 {
-	bool need_warm_reset = false;
+	bool need_warm_reset = true;
 	/* Write download mode flags if we're panic'ing
 	 * Write download mode flags if restart_mode says so
 	 * Kill download mode if master-kill switch is set
@@ -651,8 +651,8 @@ static int msm_restart_probe(struct platform_device *pdev)
 	if (!download_mode)
 		scm_disable_sdi();
 
-	force_warm_reboot = of_property_read_bool(dev->of_node,
-						"qcom,force-warm-reboot");
+	force_warm_reboot = true; // of_property_read_bool(dev->of_node,
+						// "qcom,force-warm-reboot");
 
 	return 0;
 
