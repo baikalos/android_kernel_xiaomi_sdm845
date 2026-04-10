@@ -1043,6 +1043,7 @@ int kgsl_pwrscale_init(struct device *dev, const char *governor)
 	}
 
 	pwrscale->devfreqptr = devfreq;
+
 	pwrscale->cooling_dev = of_devfreq_cooling_register(
 					device->pdev->dev.of_node, devfreq);
 	if (IS_ERR(pwrscale->cooling_dev))
@@ -1106,6 +1107,20 @@ int kgsl_pwrscale_init(struct device *dev, const char *governor)
 	kgsl_gpu_sysfs_add_link(device->gpu_sysfs_kobj,
 			 &pwrscale->devfreqptr->dev.kobj,
 			"available_governors", "gpu_available_governor");
+
+	/* Override devfreq max_freq to match the highest GPU power level.
+	 * The devfreq framework initializes max_freq from the OPP table,
+	 * which may not reflect the actual GPU frequency plan at init time.
+	 * Do this last so nothing in the init path can reset the values.
+	 */
+	mutex_lock(&devfreq->lock);
+	dev_info(device->dev,
+		 "kgsl: devfreq max_freq %lu -> %u, scaling_max_freq %lu\n",
+		 devfreq->max_freq, pwr->pwrlevels[0].gpu_freq,
+		 devfreq->scaling_max_freq);
+	devfreq->max_freq = pwr->pwrlevels[0].gpu_freq;
+	devfreq->scaling_max_freq = pwr->pwrlevels[0].gpu_freq;
+	mutex_unlock(&devfreq->lock);
 
 	return 0;
 }
