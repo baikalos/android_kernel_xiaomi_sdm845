@@ -23,6 +23,36 @@ config INPUT_PRESS_NDT_M65
 	help
 	  Say Y here if you have a press ic ndt.
 
+config TOUCHSCREEN_XIAOMI_TOUCHFEATURE
+	tristate "Xiaomi Touch Feature"
+	depends on INPUT_TOUCHSCREEN
+	help
+	  Say Y here if you enable xiaomi touch feature.
+
+	  If unsure, say N.
+
+	  To compile this driver as a module, choose M here:
+
+config TOUCHSCREEN_XIAOMI_TOUCHFEATURE_GAMEMODE
+	tristate "Xiaomi Touch Feature Gamemode"
+	depends on TOUCHSCREEN_XIAOMI_TOUCHFEATURE
+	help
+	  Say Y here if you enable xiaomi touch feature.
+
+	  If unsure, say N.
+
+	  To compile this driver as a module, choose M here:
+
+config TOUCHSCREEN_XIAOMI_TOUCHFEATURE_SENSOR
+	tristate "Xiaomi Touch Feature Sensor"
+	depends on TOUCHSCREEN_XIAOMI_TOUCHFEATURE
+	help
+	  Say Y here if you enable xiaomi touch feature.
+
+	  If unsure, say N.
+
+	  To compile this driver as a module, choose M here:
+
 config TOUCHSCREEN_ATMEL_MXT_MI
 	tristate "Atmel mXT I2C Touchscreen"
 	depends on I2C
