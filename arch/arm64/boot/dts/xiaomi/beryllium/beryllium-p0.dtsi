@@ -339,6 +339,12 @@
 		pinctrl-1 = <&ts_int_suspend &ts_reset_suspend>;
 		/* focaltech,have-key; */
 	};
+
+	xiaomi_touch {
+		compatible = "xiaomi-touch";
+		status = "ok";
+		touch,name = "xiaomi-touch";
+	};
 };
 
 &pm8998_l14 {
