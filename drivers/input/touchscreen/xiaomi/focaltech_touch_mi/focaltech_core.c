@@ -84,6 +84,15 @@ static void fts_resume_work(struct work_struct *work);
 static void fts_suspend_work(struct work_struct *work);
 extern const char *dsi_get_display_name(void);
 
+#ifdef CONFIG_TOUCHSCREEN_XIAOMI_TOUCHFEATURE
+static struct xiaomi_touch_interface xiaomi_touch_interfaces;
+static void fts_init_touchmode_data(void);
+static int fts_get_mode_value(int mode, int value_type);
+static int fts_set_cur_value(int mode, int value);
+static int fts_reset_mode(int mode);
+static int fts_get_mode_all(int mode, int *value);
+#endif
+
 #if FTS_CHARGER_EN
 extern int fts_charger_mode_set(struct i2c_client *client, bool on);
 #endif
@@ -2185,8 +2194,6 @@ static void fts_suspend_work(struct work_struct *work)
 *  Xiaomi TouchFeature integration
 *****************************************************************************/
 #ifdef CONFIG_TOUCHSCREEN_XIAOMI_TOUCHFEATURE
-static struct xiaomi_touch_interface xiaomi_touch_interfaces;
-
 static void fts_init_touchmode_data(void)
 {
 	int i;
