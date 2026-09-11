@@ -70,6 +70,9 @@ enum {
 
 #define SDE_QSEED_DEFAULT_DYN_EXP 0x0
 
+#define MAX_DOWNSCALE_RATIO_UBWC_YUV_NUMERATOR		5
+#define MAX_DOWNSCALE_RATIO_UBWC_YUV_DENOMINATOR	2
+
 #define DEFAULT_REFRESH_RATE	60
 
 /**
@@ -2334,6 +2337,7 @@ static int _sde_atomic_check_pre_downscale(struct sde_plane *psde,
 
 static void _sde_plane_get_max_downscale_limits(struct sde_plane *psde,
 		struct sde_plane_state *pstate, bool rt_client,
+		const struct sde_format *fmt, bool *capped,
 		u32 *max_numer_w, u32 *max_denom_w,
 		u32 *max_numer_h, u32 *max_denom_h)
 {
@@ -2347,6 +2351,22 @@ static void _sde_plane_get_max_downscale_limits(struct sde_plane *psde,
 	*max_denom_w = 1;
 	*max_numer_h = sblk->maxdwnscale;
 	*max_denom_h = 1;
+
+	/**
+	 * A compressed YUV surface fetched through the pipe scaler stops
+	 * producing correct pixels well before the advertised limit: past
+	 * roughly five halves the fetch runs off the end of the decoded
+	 * surface and the remainder of the plane scans out as a flat fill.
+	 * Cap it here so such a layer is rejected during atomic check and
+	 * handed back for client composition.
+	 */
+	if (fmt && SDE_FORMAT_IS_YUV(fmt) && SDE_FORMAT_IS_UBWC(fmt)) {
+		*capped = true;
+		*max_numer_w = MAX_DOWNSCALE_RATIO_UBWC_YUV_NUMERATOR;
+		*max_denom_w = MAX_DOWNSCALE_RATIO_UBWC_YUV_DENOMINATOR;
+		*max_numer_h = MAX_DOWNSCALE_RATIO_UBWC_YUV_NUMERATOR;
+		*max_denom_h = MAX_DOWNSCALE_RATIO_UBWC_YUV_DENOMINATOR;
+	}
 
 	has_predown = _sde_plane_has_pre_downscale(psde);
 	if (has_predown)
@@ -2384,7 +2404,7 @@ static int _sde_atomic_check_decimation_scaler(struct drm_plane_state *state,
 	uint32_t max_downscale_num_w, max_downscale_denom_w;
 	uint32_t max_downscale_num_h, max_downscale_denom_h;
 	uint32_t max_upscale, max_linewidth = 0;
-	bool inline_rotation, rt_client;
+	bool inline_rotation, rt_client, downscale_capped = false;
 	struct drm_crtc *crtc;
 	struct drm_crtc_state *new_cstate;
 	struct sde_kms *kms;
@@ -2433,7 +2453,8 @@ static int _sde_atomic_check_decimation_scaler(struct drm_plane_state *state,
 	new_cstate = drm_atomic_get_new_crtc_state(state->state, crtc);
 	rt_client = sde_crtc_is_rt_client(crtc, new_cstate);
 
-	_sde_plane_get_max_downscale_limits(psde, pstate, rt_client,
+	_sde_plane_get_max_downscale_limits(psde, pstate, rt_client, fmt,
+		&downscale_capped,
 		&max_downscale_num_w, &max_downscale_denom_w,
 		&max_downscale_num_h, &max_downscale_denom_h);
 
@@ -2470,12 +2491,25 @@ static int _sde_atomic_check_decimation_scaler(struct drm_plane_state *state,
 			< scaler_src_w) ||
 		(mult_frac(dst->h, max_downscale_num_h, max_downscale_denom_h)
 			< scaler_src_h)) {
-		SDE_ERROR_PLANE(psde,
-			"too much scaling %ux%u->%ux%u rot:%d dwn:%d/%d %d/%d\n",
-			scaler_src_w, scaler_src_h, dst->w, dst->h,
-			inline_rotation, max_downscale_num_w,
-			max_downscale_denom_w, max_downscale_num_h,
-			max_downscale_denom_h);
+		/*
+		 * Being turned away by the compressed-YUV cap is the normal
+		 * route to client composition, not a fault, so it must not
+		 * shout once per frame for as long as the layer is up.
+		 */
+		if (downscale_capped)
+			SDE_DEBUG_PLANE(psde,
+				"too much scaling %ux%u->%ux%u rot:%d dwn:%d/%d %d/%d\n",
+				scaler_src_w, scaler_src_h, dst->w, dst->h,
+				inline_rotation, max_downscale_num_w,
+				max_downscale_denom_w, max_downscale_num_h,
+				max_downscale_denom_h);
+		else
+			SDE_ERROR_PLANE(psde,
+				"too much scaling %ux%u->%ux%u rot:%d dwn:%d/%d %d/%d\n",
+				scaler_src_w, scaler_src_h, dst->w, dst->h,
+				inline_rotation, max_downscale_num_w,
+				max_downscale_denom_w, max_downscale_num_h,
+				max_downscale_denom_h);
 		ret = -E2BIG;
 
 	/* check inline pre-downscale support */
