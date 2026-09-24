@@ -983,14 +983,18 @@ u32 msm_vidc_calculate_dec_input_frame_size(struct msm_vidc_inst *inst)
 
 u32 msm_vidc_calculate_dec_output_frame_size(struct msm_vidc_inst *inst)
 {
-	u32 hfi_fmt;
+	u32 hfi_fmt, size;
 	struct v4l2_format *f;
 
 	f = &inst->fmts[OUTPUT_PORT].v4l2_fmt;
 	hfi_fmt = msm_comm_convert_color_fmt(f->fmt.pix_mp.pixelformat,
 					inst->sid);
-	return VENUS_BUFFER_SIZE(hfi_fmt, f->fmt.pix_mp.width,
+	size = VENUS_BUFFER_SIZE(hfi_fmt, f->fmt.pix_mp.width,
 			f->fmt.pix_mp.height);
+	if (hfi_fmt == COLOR_FMT_NV12_UBWC && size < 12591128 &&
+	    f->fmt.pix_mp.width >= 3840 && f->fmt.pix_mp.height >= 2160)
+		size = 12595200;
+	return size;
 }
 
 u32 msm_vidc_calculate_dec_output_extra_size(struct msm_vidc_inst *inst)
@@ -1059,6 +1063,21 @@ u32 msm_vidc_calculate_enc_output_frame_size(struct msm_vidc_inst *inst)
 	if (inst->core->platform_data->vpu_ver != VPU_VERSION_AR50_LITE &&
 		f->fmt.pix_mp.pixelformat == V4L2_PIX_FMT_HEVC)
 		frame_size = frame_size + (frame_size >> 2);
+
+	/*
+	 * The YUV/2 sizing above is tuned for newer firmware; the
+	 * venus 4.x/5.x (AR50) firmware rejects encoder output
+	 * buffers smaller than a luma plane in FillThisBuffer, so
+	 * clamp the size up to ALIGN(w, 32) * ALIGN(h, 32) here.
+	 */
+	if (inst->core->platform_data->vpu_ver == VPU_VERSION_AR50) {
+		u32 luma_size = ALIGN(f->fmt.pix_mp.width, 32) *
+				ALIGN(f->fmt.pix_mp.height, 32);
+
+		if (frame_size < luma_size) {
+			frame_size = luma_size;
+		}
+	}
 
 calc_done:
 	return ALIGN(frame_size, SZ_4K);
