@@ -838,6 +838,12 @@ static inline int start_streaming(struct msm_vidc_inst *inst)
 
 	f = &inst->fmts[OUTPUT_PORT].v4l2_fmt;
 	b.buffer_size = f->fmt.pix_mp.plane_fmt[0].sizeimage;
+	if (b.buffer_type == HFI_BUFFER_OUTPUT &&
+	    (f->fmt.pix_mp.pixelformat == V4L2_PIX_FMT_NV12_UBWC ||
+	     inst->fmts[INPUT_PORT].v4l2_fmt.fmt.pix_mp.pixelformat == V4L2_PIX_FMT_VP9) &&
+	    b.buffer_size < 12591128 &&
+	    f->fmt.pix_mp.width >= 3840 && f->fmt.pix_mp.height >= 2160)
+		b.buffer_size = 12595200;
 	rc = call_hfi_op(hdev, session_set_property,
 			inst->session, HFI_PROPERTY_PARAM_BUFFER_SIZE_MINIMUM,
 			&b, sizeof(b));

@@ -1729,7 +1729,15 @@ static void handle_event_change(enum hal_command_response cmd, void *data)
 						__func__);
 			}
 			/* Update driver buffer count */
-			fmt->count_min = event_notify->fw_min_cnt;
+			/*
+			* venus 4.x/5.x firmware reports fw_min_cnt = 0 in the
+			* seq-changed event; keep the previous count instead of
+			* sending BUFFER_COUNT_ACTUAL with min 0 (which makes the
+			* firmware assert).
+			*/
+			if (event_notify->fw_min_cnt) {
+				fmt->count_min = event_notify->fw_min_cnt;
+			}
 			msm_dcvs_reset(inst);
 			s_vpr_h(inst->sid,
 				"seq: No parameter change continue session\n");
@@ -1839,7 +1847,15 @@ static void handle_event_change(enum hal_command_response cmd, void *data)
 		msm_dcvs_try_enable(inst);
 		extra_buff_count = msm_vidc_get_extra_buff_count(inst,
 				HAL_BUFFER_OUTPUT);
-		fmt->count_min = event_notify->fw_min_cnt;
+		/*
+		 * venus 4.x/5.x firmware reports fw_min_cnt = 0 in the
+		 * seq-changed event; keep the previous count instead of
+		 * sending BUFFER_COUNT_ACTUAL with min 0 (which makes the
+		 * firmware assert).
+		 */
+		if (event_notify->fw_min_cnt) {
+			fmt->count_min = event_notify->fw_min_cnt;
+		}
 		fmt->count_min_host = fmt->count_min + extra_buff_count;
 		s_vpr_h(inst->sid,
 			"seq: hal buffer[%d] count: min %d min_host %d\n",
@@ -3308,8 +3324,13 @@ int msm_comm_update_dpb_bufreqs(struct msm_vidc_inst *inst)
 	hfi_fmt = msm_comm_convert_color_fmt(inst->clk_data.dpb_fourcc,
 					inst->sid);
 	f = &inst->fmts[OUTPUT_PORT].v4l2_fmt;
-	req->buffer_size = VENUS_BUFFER_SIZE(hfi_fmt, f->fmt.pix_mp.width,
-			f->fmt.pix_mp.height);
+	req->buffer_size = max(req->buffer_size,
+			VENUS_BUFFER_SIZE(hfi_fmt, f->fmt.pix_mp.width,
+			f->fmt.pix_mp.height));
+	if (req->buffer_size < 12591128 && f->fmt.pix_mp.width >= 3840 &&
+	    f->fmt.pix_mp.height >= 2160)
+		req->buffer_size = 12595200;
+	req->buffer_size = ALIGN(req->buffer_size, 4096);
 
 	return rc;
 }
@@ -3864,10 +3885,13 @@ static int set_dpb_only_buffers(struct msm_vidc_inst *inst,
 	}
 	num_buffers = dpb.buffer_count_actual;
 	buffer_size = dpb.buffer_size;
+	f = &inst->fmts[OUTPUT_PORT].v4l2_fmt;
+	if (buffer_size < 12591128 && f->fmt.pix_mp.width >= 3840 &&
+	    f->fmt.pix_mp.height >= 2160)
+		buffer_size = 12595200;
+	buffer_size = ALIGN(buffer_size, 4096);
 	s_vpr_h(inst->sid, "dpb: cnt = %d, size = %d\n",
 		num_buffers, buffer_size);
-
-	f = &inst->fmts[OUTPUT_PORT].v4l2_fmt;
 
 	b.buffer_type = get_hfi_buffer(buffer_type, inst->sid);
 	if (!b.buffer_type)
@@ -5012,6 +5036,9 @@ int msm_comm_try_get_bufreqs(struct msm_vidc_inst *inst)
 			if (is_internal_buffer(req.buffer_type)) {
 				memcpy(curr_req, &req,
 					sizeof(struct hal_buffer_requirements));
+			} else if (req.buffer_type == HAL_BUFFER_OUTPUT &&
+				   is_secondary_output_mode(inst)) {
+				curr_req->buffer_size = max(curr_req->buffer_size, req.buffer_size);
 			}
 		}
 	}
