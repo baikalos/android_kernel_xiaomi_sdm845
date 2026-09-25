@@ -32,6 +32,8 @@
 #define MAX_QP_PACKED 0x7F7F7F
 #define DEFAULT_QP 0xA
 #define DEFAULT_QP_PACKED 0xA0A0A
+int msm_venc_set_frame_size(struct msm_vidc_inst *inst);
+int msm_venc_set_color_format(struct msm_vidc_inst *inst);
 #define MAX_INTRA_REFRESH_MBS ((7680 * 4320) >> 8)
 #define MAX_LTR_FRAME_COUNT 10
 #define MAX_NUM_B_FRAMES 1
@@ -1314,7 +1316,22 @@ int msm_venc_s_fmt(struct msm_vidc_inst *inst, struct v4l2_format *f)
 	 * Recalculate sizes/strides etc
 	 * Perform necessary checks to continue with session
 	 * Copy recalculated info into user format
+	 *
+	 * On SDM845, camera buffers are UBWC-compressed.  The Codec2
+	 * V4L2 HAL sends NV12_UBWC (Q128) as the pixel format.
+	 * Force NV12_UBWC for any non-standard input format so the
+	 * HAL queues UBWC buffers and the firmware processes them.
 	 */
+	if (f->type == INPUT_MPLANE &&
+	    f->fmt.pix_mp.pixelformat != V4L2_PIX_FMT_NV12_UBWC &&
+	    f->fmt.pix_mp.pixelformat != V4L2_PIX_FMT_NV12_TP10_UBWC &&
+	    f->fmt.pix_mp.pixelformat != V4L2_PIX_FMT_SDE_Y_CBCR_H2V2_P010_VENUS) {
+		d_vpr_h("venc: forcing input fmt %#x -> NV12_UBWC for %dx%d\n",
+			f->fmt.pix_mp.pixelformat,
+			f->fmt.pix_mp.width, f->fmt.pix_mp.height);
+		f->fmt.pix_mp.pixelformat = V4L2_PIX_FMT_NV12_UBWC;
+	}
+
 	if (f->type == OUTPUT_MPLANE) {
 		fmt = &inst->fmts[OUTPUT_PORT];
 		fmt_desc = msm_comm_get_pixel_fmt_fourcc(venc_output_formats,
@@ -1448,6 +1465,11 @@ int msm_venc_set_default_profile(struct msm_vidc_inst *inst)
 	else
 		s_vpr_e(inst->sid, "%s: Invalid codec type %#x\n",
 			__func__, get_v4l2_codec(inst));
+
+	if (inst->session) {
+		msm_venc_set_frame_size(inst);
+		msm_venc_set_color_format(inst);
+	}
 	return 0;
 }
 
@@ -2092,6 +2114,9 @@ int msm_venc_set_color_format(struct msm_vidc_inst *inst)
 	struct v4l2_format *f;
 
 	f = &inst->fmts[INPUT_PORT].v4l2_fmt;
+
+	/* Format is already set to NV12_UBWC by msm_venc_s_fmt() */
+
 	rc = msm_comm_set_color_format(inst, HAL_BUFFER_INPUT,
 				f->fmt.pix_mp.pixelformat);
 	if (rc)
