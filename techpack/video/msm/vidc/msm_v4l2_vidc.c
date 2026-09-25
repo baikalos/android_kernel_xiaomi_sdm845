@@ -129,6 +129,14 @@ int msm_v4l2_reqbufs(struct file *file, void *fh,
 	return msm_vidc_reqbufs((void *)vidc_inst, b);
 }
 
+int msm_v4l2_create_bufs(struct file *file, void *fh,
+				struct v4l2_create_buffers *b)
+{
+	struct msm_vidc_inst *vidc_inst = get_vidc_inst(file, fh);
+
+	return msm_vidc_create_bufs((void *)vidc_inst, b);
+}
+
 int msm_v4l2_qbuf(struct file *file, void *fh,
 				struct v4l2_buffer *b)
 {
@@ -233,6 +241,7 @@ const struct v4l2_ioctl_ops msm_v4l2_ioctl_ops = {
 	.vidioc_g_fmt_vid_cap_mplane = msm_v4l2_g_fmt,
 	.vidioc_g_fmt_vid_out_mplane = msm_v4l2_g_fmt,
 	.vidioc_reqbufs = msm_v4l2_reqbufs,
+	.vidioc_create_bufs = msm_v4l2_create_bufs,
 	.vidioc_qbuf = msm_v4l2_qbuf,
 	.vidioc_dqbuf = msm_v4l2_dqbuf,
 	.vidioc_streamon = msm_v4l2_streamon,
