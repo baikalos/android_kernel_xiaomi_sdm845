@@ -569,6 +569,12 @@ int msm_vdec_s_fmt(struct msm_vidc_inst *inst, struct v4l2_format *f)
 	 */
 	if (f->type == OUTPUT_MPLANE) {
 		fmt = &inst->fmts[OUTPUT_PORT];
+		if (!f->fmt.pix_mp.pixelformat)
+			f->fmt.pix_mp.pixelformat = fmt->v4l2_fmt.fmt.pix_mp.pixelformat;
+		if (!f->fmt.pix_mp.width)
+			f->fmt.pix_mp.width = fmt->v4l2_fmt.fmt.pix_mp.width;
+		if (!f->fmt.pix_mp.height)
+			f->fmt.pix_mp.height = fmt->v4l2_fmt.fmt.pix_mp.height;
 		fmt_desc = msm_comm_get_pixel_fmt_fourcc(vdec_output_formats,
 			ARRAY_SIZE(vdec_output_formats),
 			f->fmt.pix_mp.pixelformat, inst->sid);
@@ -626,6 +632,12 @@ int msm_vdec_s_fmt(struct msm_vidc_inst *inst, struct v4l2_format *f)
 		memcpy(f, &fmt->v4l2_fmt, sizeof(struct v4l2_format));
 	} else if (f->type == INPUT_MPLANE) {
 		fmt = &inst->fmts[INPUT_PORT];
+		if (!f->fmt.pix_mp.pixelformat)
+			f->fmt.pix_mp.pixelformat = fmt->v4l2_fmt.fmt.pix_mp.pixelformat;
+		if (!f->fmt.pix_mp.width)
+			f->fmt.pix_mp.width = fmt->v4l2_fmt.fmt.pix_mp.width;
+		if (!f->fmt.pix_mp.height)
+			f->fmt.pix_mp.height = fmt->v4l2_fmt.fmt.pix_mp.height;
 		fmt_desc = msm_comm_get_pixel_fmt_fourcc(vdec_input_formats,
 			ARRAY_SIZE(vdec_input_formats),
 			f->fmt.pix_mp.pixelformat, inst->sid);
