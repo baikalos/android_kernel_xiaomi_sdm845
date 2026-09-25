@@ -1013,8 +1013,8 @@ u32 msm_vidc_calculate_enc_input_frame_size(struct msm_vidc_inst *inst)
 	f = &inst->fmts[INPUT_PORT].v4l2_fmt;
 	hfi_fmt = msm_comm_convert_color_fmt(f->fmt.pix_mp.pixelformat,
 					inst->sid);
-	return VENUS_BUFFER_SIZE(hfi_fmt, f->fmt.pix_mp.width,
-			f->fmt.pix_mp.height);
+	return VENUS_BUFFER_SIZE_USED(hfi_fmt, f->fmt.pix_mp.width,
+			f->fmt.pix_mp.height, 0);
 }
 
 u32 msm_vidc_calculate_enc_output_frame_size(struct msm_vidc_inst *inst)

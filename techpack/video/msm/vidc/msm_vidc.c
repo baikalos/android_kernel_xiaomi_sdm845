@@ -303,6 +303,31 @@ int msm_vidc_reqbufs(void *instance, struct v4l2_requestbuffers *b)
 }
 EXPORT_SYMBOL(msm_vidc_reqbufs);
 
+int msm_vidc_create_bufs(void *instance, struct v4l2_create_buffers *b)
+{
+	struct msm_vidc_inst *inst = instance;
+	struct buf_queue *q = NULL;
+	int rc = 0;
+
+	if (!inst || !b)
+		return -EINVAL;
+	q = msm_comm_get_vb2q(inst, b->format.type);
+	if (!q) {
+		s_vpr_e(inst->sid,
+			"Failed to find buffer queue. type %d\n", b->format.type);
+		return -EINVAL;
+	}
+
+	mutex_lock(&q->lock);
+	rc = vb2_create_bufs(&q->vb2_bufq, b);
+	mutex_unlock(&q->lock);
+
+	if (rc)
+		s_vpr_e(inst->sid, "Failed to create_bufs, %d\n", rc);
+	return rc;
+}
+EXPORT_SYMBOL(msm_vidc_create_bufs);
+
 static bool valid_v4l2_buffer(struct v4l2_buffer *b,
 		struct msm_vidc_inst *inst)
 {

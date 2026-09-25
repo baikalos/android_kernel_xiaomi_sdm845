@@ -4643,8 +4643,12 @@ static int msm_comm_qbuf_superframe_to_hfi(struct msm_vidc_inst *inst,
 	f = &inst->fmts[INPUT_PORT].v4l2_fmt;
 	hfi_fmt = msm_comm_convert_color_fmt(f->fmt.pix_mp.pixelformat,
 					inst->sid);
-	frame_size = VENUS_BUFFER_SIZE(hfi_fmt, f->fmt.pix_mp.width,
-			f->fmt.pix_mp.height);
+	if (inst->session_type == MSM_VIDC_ENCODER)
+		frame_size = VENUS_BUFFER_SIZE_USED(hfi_fmt, f->fmt.pix_mp.width,
+				f->fmt.pix_mp.height, 0);
+	else
+		frame_size = VENUS_BUFFER_SIZE(hfi_fmt, f->fmt.pix_mp.width,
+				f->fmt.pix_mp.height);
 	if (frame_size * superframe_count !=
 		mbuf->vvb.vb2_buf.planes[0].length) {
 		s_vpr_e(inst->sid,
