@@ -1686,6 +1686,7 @@ static void handle_event_change(enum hal_command_response cmd, void *data)
 		s_vpr_h(inst->sid,
 			"seq: event_notify->height = %d event_notify->width = %d\n",
 				event_notify->height, event_notify->width);
+
 		if (codec == V4L2_PIX_FMT_HEVC || codec == V4L2_PIX_FMT_VP9)
 			event_fields_changed |= (inst->bit_depth !=
 				event_notify->bit_depth);
@@ -1714,6 +1715,18 @@ static void handle_event_change(enum hal_command_response cmd, void *data)
 		event_fields_changed |=
 			(fmt->v4l2_fmt.fmt.pix_mp.width != event_notify->width);
 
+		/* If required DPB count increased, promote to INSUFFICIENT so client allocates more */
+		extra_buff_count = msm_vidc_get_extra_buff_count(inst,
+				HAL_BUFFER_OUTPUT);
+		if (event_notify->fw_min_cnt &&
+		    (event_notify->fw_min_cnt > fmt->count_min ||
+		     (event_notify->fw_min_cnt + extra_buff_count) > fmt->count_actual)) {
+			s_vpr_h(inst->sid,
+				"seq: buffer requirement increased from min %d / act %d to %d (extra %d), promote to INSUFFICIENT\n",
+				fmt->count_min, fmt->count_actual, event_notify->fw_min_cnt, extra_buff_count);
+			event_fields_changed = true;
+		}
+
 		if (event_fields_changed) {
 			event = V4L2_EVENT_SEQ_CHANGED_INSUFFICIENT;
 		} else {
@@ -1729,12 +1742,6 @@ static void handle_event_change(enum hal_command_response cmd, void *data)
 						__func__);
 			}
 			/* Update driver buffer count */
-			/*
-			* venus 4.x/5.x firmware reports fw_min_cnt = 0 in the
-			* seq-changed event; keep the previous count instead of
-			* sending BUFFER_COUNT_ACTUAL with min 0 (which makes the
-			* firmware assert).
-			*/
 			if (event_notify->fw_min_cnt) {
 				fmt->count_min = event_notify->fw_min_cnt;
 			}
@@ -1821,8 +1828,8 @@ static void handle_event_change(enum hal_command_response cmd, void *data)
 		event_notify->bit_depth, event_notify->pic_struct,
 		event_notify->colour_space);
 
-	s_vpr_h(inst->sid, "seq: fw_min_count = %u\n",
-		event_notify->fw_min_cnt);
+	s_vpr_h(inst->sid, "seq: fw_min_count = %u max_dpb = %u\n",
+		event_notify->fw_min_cnt, event_notify->max_dpb_count);
 
 	mutex_lock(&inst->lock);
 	inst->in_reconfig = true;
@@ -1847,12 +1854,6 @@ static void handle_event_change(enum hal_command_response cmd, void *data)
 		msm_dcvs_try_enable(inst);
 		extra_buff_count = msm_vidc_get_extra_buff_count(inst,
 				HAL_BUFFER_OUTPUT);
-		/*
-		 * venus 4.x/5.x firmware reports fw_min_cnt = 0 in the
-		 * seq-changed event; keep the previous count instead of
-		 * sending BUFFER_COUNT_ACTUAL with min 0 (which makes the
-		 * firmware assert).
-		 */
 		if (event_notify->fw_min_cnt) {
 			fmt->count_min = event_notify->fw_min_cnt;
 		}
@@ -5439,18 +5440,24 @@ int msm_comm_set_buffer_count(struct msm_vidc_inst *inst,
 	struct hfi_device *hdev;
 	struct hfi_buffer_count_actual buf_count;
 
-	if (!inst || !inst->core || !inst->core->device) {
+	if (!inst || !inst->core || !inst->core->device || !inst->session) {
 		d_vpr_e("%s: invalid parameters\n", __func__);
 		return -EINVAL;
 	}
 	hdev = inst->core->device;
+
+	if (act_count < host_count) {
+		s_vpr_h(inst->sid, "%s: act_count %d < host_count %d, clamping\n",
+			__func__, act_count, host_count);
+		act_count = host_count;
+	}
 
 	buf_count.buffer_type = get_hfi_buffer(type, inst->sid);
 	buf_count.buffer_count_actual = act_count;
 	buf_count.buffer_count_min_host = host_count;
 	/* set total superframe buffers count */
 	ctrl = get_ctrl(inst, V4L2_CID_MPEG_VIDC_SUPERFRAME);
-	if (ctrl->val)
+	if (ctrl && ctrl->val)
 		buf_count.buffer_count_actual = act_count * ctrl->val;
 	s_vpr_h(inst->sid, "%s: hal_buffer %d min_host %d actual %d\n",
 		__func__, type,	host_count, act_count);

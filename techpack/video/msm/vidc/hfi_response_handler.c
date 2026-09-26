@@ -257,27 +257,34 @@ static int hfi_process_sess_evt_seq_changed(u32 device_id,
 					sizeof(u32);
 				rem_size -= sizeof(u32);
 				break;
-			case HFI_PROPERTY_CONFIG_BUFFER_REQUIREMENTS:
+			case HFI_PROPERTY_CONFIG_BUFFER_REQUIREMENTS: {
+				struct hfi_buffer_requirements *buf_req;
+
 				if (!validate_pkt_size(rem_size, sizeof(struct
 					hfi_buffer_requirements)))
 					return -E2BIG;
 				data_ptr = data_ptr + sizeof(u32);
+				buf_req = (struct hfi_buffer_requirements *)data_ptr;
+				if (!event_notify.fw_min_cnt)
+					event_notify.fw_min_cnt = buf_req->buffer_count_min;
+				s_vpr_h(sid, "Capture Count (buffreq min): %d\n",
+					buf_req->buffer_count_min);
 				data_ptr +=
 					sizeof(struct hfi_buffer_requirements);
 				rem_size -=
 					sizeof(struct hfi_buffer_requirements);
 				break;
-			case HFI_INDEX_EXTRADATA_INPUT_CROP:
+			}
+			case HFI_INDEX_EXTRADATA_INPUT_CROP: {
 				if (!validate_pkt_size(rem_size, sizeof(struct
 				     hfi_index_extradata_input_crop_payload)))
 					return -E2BIG;
-				data_ptr = data_ptr + sizeof(u32);
-				data_ptr +=
-					sizeof(struct
+				data_ptr += sizeof(u32) + sizeof(struct
 					hfi_index_extradata_input_crop_payload);
-				rem_size -= sizeof(struct
+				rem_size -= sizeof(u32) + sizeof(struct
 					hfi_index_extradata_input_crop_payload);
 				break;
+			}
 			case HFI_PROPERTY_PARAM_VDEC_DPB_COUNTS_AR50: {
 				struct hfi_dpb_counts_ar50 *ar50_dpb;
 
@@ -293,7 +300,8 @@ static int hfi_process_sess_evt_seq_changed(u32 device_id,
 				event_notify.max_dec_buffering =
 					ar50_dpb->max_dec_buffering;
 				event_notify.max_reorder_frames = 0;
-				event_notify.fw_min_cnt = 0;
+				if (!event_notify.fw_min_cnt)
+					event_notify.fw_min_cnt = ar50_dpb->max_dec_buffering;
 				s_vpr_h(sid,
 					"AR50 FW DPB counts: dpb %d ref %d buff %d\n",
 						ar50_dpb->max_dpb_count,

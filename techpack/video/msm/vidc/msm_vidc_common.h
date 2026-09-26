@@ -65,16 +65,18 @@ static inline struct v4l2_ctrl *get_ctrl(struct msm_vidc_inst *inst,
 {
 	int i;
 
+	if (!inst || !inst->ctrls || !inst->num_ctrls)
+		return NULL;
+
 	if (inst->session_type == MSM_VIDC_CVP &&
 	    inst->core->resources.cvp_internal)
 		return inst->ctrls[0];
 
 	for (i = 0; i < inst->num_ctrls; i++) {
-		if (inst->ctrls[i]->id == id)
+		if (inst->ctrls[i] && inst->ctrls[i]->id == id)
 			return inst->ctrls[i];
 	}
-	s_vpr_e(inst->sid, "%s: control id (%#x) not found\n", __func__, id);
-	MSM_VIDC_ERROR(true);
+	s_vpr_h(inst->sid, "%s: control id (%#x) not found\n", __func__, id);
 	return inst->ctrls[0];
 }
 
