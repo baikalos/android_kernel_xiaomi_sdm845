@@ -278,6 +278,32 @@ static int hfi_process_sess_evt_seq_changed(u32 device_id,
 				rem_size -= sizeof(struct
 					hfi_index_extradata_input_crop_payload);
 				break;
+			case HFI_PROPERTY_PARAM_VDEC_DPB_COUNTS_AR50: {
+				struct hfi_dpb_counts_ar50 *ar50_dpb;
+
+				if (!validate_pkt_size(rem_size, sizeof(struct
+					hfi_dpb_counts_ar50)))
+					return -E2BIG;
+				data_ptr = data_ptr + sizeof(u32);
+				ar50_dpb = (struct hfi_dpb_counts_ar50 *) data_ptr;
+				event_notify.max_dpb_count =
+					ar50_dpb->max_dpb_count;
+				event_notify.max_ref_frames =
+					ar50_dpb->max_ref_count;
+				event_notify.max_dec_buffering =
+					ar50_dpb->max_dec_buffering;
+				event_notify.max_reorder_frames = 0;
+				event_notify.fw_min_cnt = 0;
+				s_vpr_h(sid,
+					"AR50 FW DPB counts: dpb %d ref %d buff %d\n",
+						ar50_dpb->max_dpb_count,
+						ar50_dpb->max_ref_count,
+						ar50_dpb->max_dec_buffering);
+				data_ptr +=
+					sizeof(struct hfi_dpb_counts_ar50);
+				rem_size -= sizeof(struct hfi_dpb_counts_ar50);
+				break;
+			}
 			case HFI_PROPERTY_PARAM_VDEC_DPB_COUNTS:
 				if (!validate_pkt_size(rem_size, sizeof(struct
 					hfi_dpb_counts)))
@@ -308,7 +334,7 @@ static int hfi_process_sess_evt_seq_changed(u32 device_id,
 			default:
 				s_vpr_e(sid, "%s: cmd: %#x not supported\n",
 					__func__, prop_id);
-				break;
+				return -E2BIG;
 			}
 			num_properties_changed--;
 		} while (num_properties_changed > 0);
