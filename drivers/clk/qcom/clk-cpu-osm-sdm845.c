@@ -231,12 +231,14 @@ static int clk_cpu_set_rate(struct clk_hw *hw, unsigned long rate,
 static int clk_pwrcl_set_rate(struct clk_hw *hw, unsigned long rate,
 						unsigned long parent_rate)
 {
+	int ret = clk_cpu_set_rate(hw, rate, parent_rate);
+
+#if !IS_ENABLED(CONFIG_ARM_QCOM_CPUFREQ_HW)
 	struct clk_hw *p_hw = clk_hw_get_parent(hw);
 	struct clk_osm *parent = to_clk_osm(p_hw);
-	int ret, index = 0, count = 40;
+	int index = 0, count = 40;
 	u32 curr_lval;
 
-	ret = clk_cpu_set_rate(hw, rate, parent_rate);
 	if (ret)
 		return ret;
 
@@ -258,6 +260,9 @@ static int clk_pwrcl_set_rate(struct clk_hw *hw, unsigned long rate,
 	}
 	pr_err("cannot set %s to %lu\n", clk_hw_get_name(hw), rate);
 	return -ETIMEDOUT;
+#else
+	return ret;
+#endif
 }
 
 static unsigned long clk_cpu_recalc_rate(struct clk_hw *hw,
