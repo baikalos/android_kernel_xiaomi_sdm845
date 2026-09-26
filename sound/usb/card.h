@@ -7,9 +7,9 @@
 #define MAX_NR_RATES	1024
 #define MAX_PACKS	6		/* per URB */
 #define MAX_PACKS_HS	(MAX_PACKS * 8)	/* in high speed mode */
-#define MAX_URBS	12
+#define MAX_URBS	16
 #define SYNC_URBS	4	/* always four urbs for sync */
-#define MAX_QUEUE	18	/* try not to exceed this queue length, in ms */
+#define MAX_QUEUE	96	/* try not to exceed this queue length, in ms */
 
 struct audioformat {
 	struct list_head list;

@@ -1128,7 +1128,7 @@ static const struct snd_pcm_hardware snd_usb_hardware =
 	.buffer_bytes_max =	1024 * 1024,
 	.period_bytes_min =	64,
 	.period_bytes_max =	512 * 1024,
-	.periods_min =		2,
+	.periods_min =		4,
 	.periods_max =		1024,
 };
 
