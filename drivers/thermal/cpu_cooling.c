@@ -122,47 +122,7 @@ static LIST_HEAD(cpufreq_cdev_list);
 static int cpufreq_thermal_notifier(struct notifier_block *nb,
 				    unsigned long event, void *data)
 {
-	struct cpufreq_policy *policy = data;
-	unsigned long clipped_freq = ULONG_MAX, floor_freq = 0;
-	struct cpufreq_cooling_device *cpufreq_cdev;
-
-	if (event != CPUFREQ_INCOMPATIBLE)
-		return NOTIFY_DONE;
-
-	mutex_lock(&cooling_list_lock);
-	list_for_each_entry(cpufreq_cdev, &cpufreq_cdev_list, node) {
-		/*
-		 * A new copy of the policy is sent to the notifier and can't
-		 * compare that directly.
-		 */
-		if (policy->cpu != cpufreq_cdev->policy->cpu)
-			continue;
-
-		/*
-		 * policy->max is the maximum allowed frequency defined by user
-		 * and clipped_freq is the maximum that thermal constraints
-		 * allow.
-		 *
-		 * If clipped_freq is lower than policy->max, then we need to
-		 * readjust policy->max.
-		 *
-		 * But, if clipped_freq is greater than policy->max, we don't
-		 * need to do anything.
-		 *
-		 * Similarly, if policy minimum set by the user is less than
-		 * the floor_frequency, then adjust the policy->min.
-		 */
-		clipped_freq = cpufreq_cdev->clipped_freq;
-		floor_freq = cpufreq_cdev->floor_freq;
-		if (policy->max > clipped_freq || policy->min < floor_freq)
-			cpufreq_verify_within_limits(policy, floor_freq,
-							clipped_freq);
-		break;
-	}
-
-	mutex_unlock(&cooling_list_lock);
-
-	return NOTIFY_OK;
+	return NOTIFY_DONE;
 }
 
 #ifdef CONFIG_ENERGY_MODEL
@@ -372,19 +332,6 @@ static int cpufreq_set_min_state(struct thermal_cooling_device *cdev,
 
 	cpufreq_cdev->cpufreq_floor_state = state;
 	floor_freq = get_state_freq(cpufreq_cdev, state);
-	cpufreq_cdev->floor_freq = floor_freq;
-
-	/*
-	 * Check if the device has a platform mitigation function that
-	 * can handle the CPU freq mitigation, if not, notify cpufreq
-	 * framework.
-	 */
-	if (cpufreq_cdev->plat_ops &&
-		cpufreq_cdev->plat_ops->floor_limit)
-		cpufreq_cdev->plat_ops->floor_limit(cpu, floor_freq);
-	else
-		cpufreq_update_policy(cpu);
-
 	return 0;
 }
 
@@ -415,17 +362,6 @@ static int cpufreq_set_cur_state(struct thermal_cooling_device *cdev,
 	clip_freq = get_state_freq(cpufreq_cdev, state);
 	cpufreq_cdev->cpufreq_state = state;
 	cpufreq_cdev->clipped_freq = clip_freq;
-
-	/* Check if the device has a platform mitigation function that
-	 * can handle the CPU freq mitigation, if not, notify cpufreq
-	 * framework.
-	 */
-	if (cpufreq_cdev->plat_ops &&
-		cpufreq_cdev->plat_ops->ceil_limit)
-		cpufreq_cdev->plat_ops->ceil_limit(cpufreq_cdev->policy->cpu,
-							clip_freq);
-	else
-		cpufreq_update_policy(cpufreq_cdev->policy->cpu);
 
 	return 0;
 }

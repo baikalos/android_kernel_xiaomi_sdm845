@@ -161,62 +161,12 @@ static int cpu_isolate_set_cur_state(struct thermal_cooling_device *cdev,
 				 unsigned long state)
 {
 	struct cpu_isolate_cdev *cpu_isolate_cdev = cdev->devdata;
-	struct device *cpu_dev;
-	int ret = 0;
-	int cpu = 0;
 
 	if (cpu_isolate_cdev->cpu_id == -1)
 		return -ENODEV;
 
-	/* Request state should be less than max_level */
 	if (state > CPU_ISOLATE_LEVEL)
 		return -EINVAL;
-
-	state = !!state;
-	/* Check if the old cooling action is same as new cooling action */
-	if (cpu_isolate_cdev->cpu_isolate_state == state)
-		return 0;
-
-	mutex_lock(&cpu_isolate_lock);
-	cpu = cpu_isolate_cdev->cpu_id;
-	cpu_isolate_cdev->cpu_isolate_state = state;
-	if (state == CPU_ISOLATE_LEVEL) {
-		if (cpu_online(cpu) &&
-			(!cpumask_test_and_set_cpu(cpu,
-			&cpus_isolated_by_thermal))) {
-			mutex_unlock(&cpu_isolate_lock);
-			if (sched_isolate_cpu(cpu))
-				cpumask_clear_cpu(cpu,
-					&cpus_isolated_by_thermal);
-			mutex_lock(&cpu_isolate_lock);
-		}
-		cpumask_set_cpu(cpu, &cpus_in_max_cooling_level);
-		blocking_notifier_call_chain(&cpu_max_cooling_level_notifer,
-						1, (void *)(long)cpu);
-	} else {
-		if (cpumask_test_and_clear_cpu(cpu, &cpus_pending_online)) {
-			cpu_dev = get_cpu_device(cpu);
-			if (!cpu_dev) {
-				pr_err("CPU:%d cpu dev error\n", cpu);
-				mutex_unlock(&cpu_isolate_lock);
-				return ret;
-			}
-			mutex_unlock(&cpu_isolate_lock);
-			ret = device_online(cpu_dev);
-			if (ret)
-				pr_err("CPU:%d online error:%d\n", cpu, ret);
-			return ret;
-		} else if (cpumask_test_and_clear_cpu(cpu,
-			&cpus_isolated_by_thermal)) {
-			mutex_unlock(&cpu_isolate_lock);
-			sched_unisolate_cpu(cpu);
-			mutex_lock(&cpu_isolate_lock);
-		}
-		cpumask_clear_cpu(cpu, &cpus_in_max_cooling_level);
-		blocking_notifier_call_chain(&cpu_max_cooling_level_notifer,
-						0, (void *)(long)cpu);
-	}
-	mutex_unlock(&cpu_isolate_lock);
 
 	return 0;
 }

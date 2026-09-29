@@ -138,21 +138,15 @@ static unsigned long limits_mitigation_notify(struct cpufreq_qcom *c,
 	u32 cpu;
 	unsigned long freq;
 
-	if (limit) {
-		freq = readl_relaxed(c->reg_bases[REG_DOMAIN_STATE]) &
-				GENMASK(7, 0);
-		freq = DIV_ROUND_CLOSEST_ULL(freq * c->xo_rate, 1000);
-	} else {
-		cpu = cpumask_first(&c->related_cpus);
-		policy = cpufreq_cpu_get_raw(cpu);
-		if (!policy)
-			freq = U32_MAX;
-		else
-			freq = policy->cpuinfo.max_freq;
-	}
+	cpu = cpumask_first(&c->related_cpus);
+	policy = cpufreq_cpu_get_raw(cpu);
+	if (!policy)
+		freq = U32_MAX;
+	else
+		freq = policy->cpuinfo.max_freq;
 
 	sched_update_cpu_freq_min_max(&c->related_cpus, 0, freq);
-	trace_dcvsh_freq(cpumask_first(&c->related_cpus), freq);
+	trace_dcvsh_freq(cpu, freq);
 	c->dcvsh_freq_limit = freq;
 
 	return freq;
@@ -162,36 +156,24 @@ static void limits_dcvsh_poll(struct work_struct *work)
 {
 	struct cpufreq_qcom *c = container_of(work, struct cpufreq_qcom,
 						freq_poll_work.work);
-	unsigned long freq_limit, dcvsh_freq;
-	u32 regval, cpu;
+	u32 regval;
 
 	mutex_lock(&c->dcvsh_lock);
 
-	cpu = cpumask_first(&c->related_cpus);
+	/* Update scheduler for throttle removal */
+	limits_mitigation_notify(c, false);
 
-	freq_limit = limits_mitigation_notify(c, true);
+	regval = readl_relaxed(c->reg_bases[REG_INTR_CLR]);
+	regval |= GT_IRQ_STATUS;
+	writel_relaxed(regval, c->reg_bases[REG_INTR_CLR]);
 
-	dcvsh_freq = qcom_cpufreq_hw_get(cpu);
-
-	if (freq_limit != dcvsh_freq) {
-		mod_delayed_work(system_highpri_wq, &c->freq_poll_work,
-				msecs_to_jiffies(LIMITS_POLLING_DELAY_MS));
-	} else {
-		/* Update scheduler for throttle removal */
-		limits_mitigation_notify(c, false);
-
-		regval = readl_relaxed(c->reg_bases[REG_INTR_CLR]);
-		regval |= GT_IRQ_STATUS;
-		writel_relaxed(regval, c->reg_bases[REG_INTR_CLR]);
-
-		c->is_irq_enabled = true;
-		enable_irq(c->dcvsh_irq);
-	}
+	c->is_irq_enabled = true;
+	enable_irq(c->dcvsh_irq);
 
 	mutex_unlock(&c->dcvsh_lock);
 }
 
-static bool dcvsh_core_count_change(struct cpufreq_qcom *c)
+static bool __maybe_unused dcvsh_core_count_change(struct cpufreq_qcom *c)
 {
 	bool ret = false;
 	unsigned long freq, flags;
@@ -227,19 +209,9 @@ static irqreturn_t dcvsh_handle_isr(int irq, void *data)
 		return IRQ_HANDLED;
 
 	mutex_lock(&c->dcvsh_lock);
-
-	if (c->is_irq_enabled) {
-		if (c->skip_data.skip && dcvsh_core_count_change(c))
-			goto done;
-
-		c->is_irq_enabled = false;
-		disable_irq_nosync(c->dcvsh_irq);
-		limits_mitigation_notify(c, true);
-		mod_delayed_work(system_highpri_wq, &c->freq_poll_work,
-				msecs_to_jiffies(LIMITS_POLLING_DELAY_MS));
-
-	}
-done:
+	regval = readl_relaxed(c->reg_bases[REG_INTR_CLR]);
+	regval |= GT_IRQ_STATUS;
+	writel_relaxed(regval, c->reg_bases[REG_INTR_CLR]);
 	mutex_unlock(&c->dcvsh_lock);
 
 	return IRQ_HANDLED;
@@ -493,9 +465,6 @@ static int qcom_cpufreq_hw_read_lut(struct platform_device *pdev,
 						c->table[i-1].frequency;
 				c->skip_data.prev_index = i - 1;
 				c->skip_data.prev_cc = prev_cc;
-			} else {
-				cur_freq = CPUFREQ_ENTRY_INVALID;
-				c->table[i].flags = CPUFREQ_BOOST_FREQ;
 			}
 		}
 
@@ -505,13 +474,6 @@ static int qcom_cpufreq_hw_read_lut(struct platform_device *pdev,
 		 */
 		if (i > 0 && c->table[i - 1].frequency ==
 				c->table[i].frequency) {
-			if (prev_cc == core_count) {
-				struct cpufreq_frequency_table *prev =
-							&c->table[i - 1];
-
-				if (prev_freq == CPUFREQ_ENTRY_INVALID)
-					prev->flags = CPUFREQ_BOOST_FREQ;
-			}
 			break;
 		}
 
