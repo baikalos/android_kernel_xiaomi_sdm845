@@ -112,8 +112,13 @@ enum hvdcp3_type {
 
 /* QC2.0 voltage UV threshold 7.8V */
 #define QC2_HVDCP_VOL_UV_THR		7800000
-#define CHECK_VBUS_WORK_DELAY_MS		10
-#define UNSTANDARD_HVDCP2_UA		1800000
+/*
+ * QC2.0 adapters need ~100ms after FORCE_9V to actually raise VBUS.
+ * Checking at 10ms reads a stale 5V and misclassifies a genuine QC2.0
+ * charger as "unstandard", forcing it back to 5V forever.
+ */
+#define CHECK_VBUS_WORK_DELAY_MS		500
+#define UNSTANDARD_HVDCP2_UA		3000000
 #endif
 
 enum smb_mode {

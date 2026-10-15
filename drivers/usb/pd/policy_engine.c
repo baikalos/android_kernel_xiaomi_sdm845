@@ -356,8 +356,8 @@ static void *usbpd_ipc_log;
 #if defined(CONFIG_MACH_XIAOMI_SDM845)
 #define PD_VBUS_MAX_VOLTAGE_LIMIT 9000000
 
-/* add for limit APDO voltage to maxium 5800mV for better efficiency */
-#define MAX_ALLOWED_APDO_UV	5800000
+/* raise APDO voltage ceiling to 9V for reduced cable sag on PPS */
+#define MAX_ALLOWED_APDO_UV	9000000
 #endif
 
 static const u32 default_src_caps[] = { 0x36019096 };	/* VSafe5V @ 1.5A */
@@ -968,8 +968,46 @@ static int pd_eval_src_caps(struct usbpd *pd)
 	if (pd->peer_usb_comm && pd->current_dr == DR_UFP && !pd->pd_connected)
 		start_usb_peripheral(pd);
 
-	/* Select the first PDO (vSafe5V) immediately. */
-	pd_select_pdo(pd, 1, 0, 0);
+	/*
+	 * Select the highest-current fixed PDO whose voltage is within
+	 * the allowed limit (pd_vbus_max_limit, usually 9V). Defaults to
+	 * PDO 1 (vSafe5V) if no better option is found.
+	 */
+	{
+		int best_pdo = 1;
+		int best_power_uw = 0;
+		/* fall back to 12V when no Xiaomi voltage limit is set */
+		int allowed_uv = pd->limit_pd_vbus ?
+				pd->pd_vbus_max_limit : 12000000;
+
+		for (i = 0; i < PD_MAX_DATA_OBJ; i++) {
+			u32 pdo = pd->received_pdos[i];
+			int uv, ua, uw;
+
+			if (!pdo)
+				break;
+			if (PD_SRC_PDO_TYPE(pdo) != PD_SRC_PDO_TYPE_FIXED)
+				continue;
+
+			uv = PD_SRC_PDO_FIXED_VOLTAGE(pdo) * 50 * 1000;
+			ua = PD_SRC_PDO_FIXED_MAX_CURR(pdo) * 10 * 1000;
+			uw = (uv / 1000) * (ua / 1000);
+
+			if (uv > allowed_uv)
+				continue;
+
+			/*
+			 * Prefer the highest power (V x A) within the allowed
+			 * voltage; among equal power, keep the first.
+			 */
+			if (uw > best_power_uw) {
+				best_power_uw = uw;
+				best_pdo = i + 1;
+			}
+		}
+
+		pd_select_pdo(pd, best_pdo, 0, 0);
+	}
 
 	return 0;
 }

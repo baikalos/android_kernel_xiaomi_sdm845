@@ -2866,7 +2866,7 @@ int smblib_set_prop_input_current_limited(struct smb_charger *chg,
 }
 
 #if defined(CONFIG_MACH_XIAOMI_SDM845)
-#define PPS_MAX_ALLOWED_5P8V		5800000
+#define PPS_MAX_ALLOWED_UV		9000000
 #endif
 int smblib_rerun_aicl(struct smb_charger *chg)
 {
@@ -2888,7 +2888,7 @@ int smblib_rerun_aicl(struct smb_charger *chg)
 
 #if defined(CONFIG_MACH_XIAOMI_SDM845)
 	if (chg->real_charger_type == POWER_SUPPLY_TYPE_USB_PD
-			&& chg->voltage_min_uv == PPS_MAX_ALLOWED_5P8V) {
+			&& chg->voltage_min_uv == PPS_MAX_ALLOWED_UV) {
 		smblib_dbg(chg, PR_MISC,
 			"PPS maxium allowed voltage is reached, no need rerun aicl\n");
 		return rc;
@@ -3541,9 +3541,9 @@ int smblib_get_prop_die_health(struct smb_charger *chg,
 #define SDP_CURRENT_UA			500000
 #define CDP_CURRENT_UA			1500000
 #if defined(CONFIG_MACH_XIAOMI_SDM845)
-#define DCP_CURRENT_UA			1800000
-#define HVDCP2_CURRENT_UA		1500000
-#define HVDCP3_CURRENT_UA		2750000
+#define DCP_CURRENT_UA			3000000
+#define HVDCP2_CURRENT_UA		3000000
+#define HVDCP3_CURRENT_UA		3000000
 #else
 #define DCP_CURRENT_UA			1500000
 #define HVDCP_CURRENT_UA		3000000
@@ -4513,6 +4513,13 @@ static void smblib_check_vbus_work(struct work_struct *work)
 				/* enable hardware INOV again */
 				vote(chg->hvdcp_hw_inov_dis_votable,
 						UNSTANDARD_QC2_VOTER, false, 0);
+				/*
+				 * Adapter confirmed at 9V: ramp to the full QC2 current.
+				 * AICL re-runs afterwards and settles at what the cable
+				 * and adapter can actually sustain.
+				 */
+				vote(chg->usb_icl_votable, LEGACY_UNKNOWN_VOTER,
+						true, HVDCP2_CURRENT_UA);
 			} else {
 				pr_info("set adapter allowance to 5V and force 5V charge\n");
 				rc = smblib_masked_write(chg, CMD_HVDCP_2_REG,
@@ -5025,10 +5032,14 @@ static void smblib_handle_hvdcp_3p0_auth_done(struct smb_charger *chg,
 	}
 
 	if (apsd_result->bit & QC_2P0_BIT) {
-		if (!chg->unstandard_hvdcp)
-			current_ua = HVDCP2_CURRENT_UA;
-		else
-			current_ua = DCP_CURRENT_UA;
+		/*
+		 * QC2.0 handshake needs ~100ms after FORCE_9V before the
+		 * adapter actually raises VBUS. Pulling full current at 5V
+		 * during that window collapses VBUS, trips usbin-uv/AICL and
+		 * restarts APSD forever. Hold 1A until check_vbus_work
+		 * confirms the adapter reached 9V, then ramp to full current.
+		 */
+		current_ua = 1000000;
 		if (!chg->check_vbus_once) {
 			schedule_delayed_work(&chg->check_vbus_work,
 					msecs_to_jiffies(CHECK_VBUS_WORK_DELAY_MS));
@@ -5146,7 +5157,7 @@ static void smblib_force_legacy_icl(struct smb_charger *chg, int pst)
 		break;
 	case POWER_SUPPLY_TYPE_USB_HVDCP:
 #if defined(CONFIG_MACH_XIAOMI_SDM845)
-		vote(chg->usb_icl_votable, LEGACY_UNKNOWN_VOTER, true, 1500000);
+		vote(chg->usb_icl_votable, LEGACY_UNKNOWN_VOTER, true, 3000000);
 		break;
 #endif
 	case POWER_SUPPLY_TYPE_USB_HVDCP_3:
