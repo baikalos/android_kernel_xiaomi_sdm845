@@ -801,7 +801,7 @@ static void remove_request(struct adios_data *ad, struct request *rq) {
 	list_del_init(&rq->queuelist);
 
 	// We might not be on the rbtree, if we are doing an insert merge
-	if (rd->dl_group)
+	if (rd && rd->dl_group)
 		del_from_dl_tree(ad, dl_idx, rq);
 
 	elv_rqhash_del(q, rq);
@@ -851,6 +851,9 @@ static void adios_request_merged(struct request_queue *q, struct request *req,
 				  enum elv_merge type) {
 	bool dl_idx = adios_optype_not_read(req);
 	struct adios_data *ad = q->elevator->elevator_data;
+
+	if (!get_rq_data(req))
+		return;
 
 	// Reposition request in the deadline-sorted tree
 	del_from_dl_tree(ad, dl_idx, req);
@@ -997,6 +1000,10 @@ static void adios_insert_requests(struct blk_mq_hw_ctx *hctx,
 			}
 			rq = list_first_entry(list, struct request, queuelist);
 			list_del_init(&rq->queuelist);
+			if (unlikely(!get_rq_data(rq))) {
+				blk_mq_request_bypass_insert(rq, false);
+				continue;
+			}
 			if (likely(ad->models_stable))
 				insert_request_post_stability(hctx, rq, at_head);
 			else
@@ -1011,9 +1018,16 @@ static void adios_prepare_request(struct request *rq, struct bio *bio) {
 	struct adios_data *ad = rq->q->elevator->elevator_data;
 	struct adios_rq_data *rd;
 
+	if (!ad) {
+		rq->elv.priv[0] = NULL;
+		return;
+	}
+
 	rd = mempool_alloc(ad->rq_data_pool, GFP_ATOMIC);
-	memset(rd, 0, sizeof(*rd));
-	rd->rq = rq;
+	if (likely(rd)) {
+		memset(rd, 0, sizeof(*rd));
+		rd->rq = rq;
+	}
 	rq->elv.priv[0] = rd;
 }
 
@@ -1339,7 +1353,12 @@ static void adios_completed_request(struct request *rq) {
 	struct adios_data *ad = rq->q->elevator->elevator_data;
 	struct adios_rq_data *rd = get_rq_data(rq);
 	union adios_in_flight_rqs ifr = { .scalar = 0 };
-	u64 now = ktime_get_ns();
+	u64 now;
+
+	if (!ad || !rd)
+		return;
+
+	now = ktime_get_ns();
 
 	if (rd->managed) {
 		union adios_in_flight_rqs ifr_to_sub = {
@@ -1404,7 +1423,7 @@ static void adios_completed_request(struct request *rq) {
 static void adios_finish_request(struct request *rq) {
 	struct adios_data *ad = rq->q->elevator->elevator_data;
 
-	if (rq->elv.priv[0]) {
+	if (ad && rq->elv.priv[0]) {
 		// Free adios_rq_data back to the memory pool
 		mempool_free(get_rq_data(rq), ad->rq_data_pool);
 		rq->elv.priv[0] = NULL;
