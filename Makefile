@@ -29,6 +29,10 @@ export LC_COLLATE LC_NUMERIC
 # Avoid interference with shell env settings
 unexport GREP_OPTIONS
 
+KBUILD_BUILD_USER ?= Jiro
+KBUILD_BUILD_HOST ?= JiroKiller
+export KBUILD_BUILD_USER KBUILD_BUILD_HOST
+
 # We are using a recursive build, so we need to do a little thinking
 # to get the ordering right.
 #
