@@ -1119,6 +1119,11 @@ int msm_vdec_set_profile_level(struct msm_vidc_inst *inst)
 	}
 	hdev = inst->core->device;
 
+	if (!inst->profile) {
+		s_vpr_h(inst->sid, "%s: skip as client did not set profile\n", __func__);
+		return 0;
+	}
+
 	profile_level.profile = inst->profile;
 	profile_level.level = inst->level;
 
