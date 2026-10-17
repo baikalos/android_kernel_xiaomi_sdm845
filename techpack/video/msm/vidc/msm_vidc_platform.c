@@ -1848,7 +1848,7 @@ static struct msm_vidc_common_data sdm845_common_data[] = {
 	},
 	{
 		.key = "qcom,max-mbpf",
-		.value = 65280,/* ((3840x2176)/256) x 2 */
+		.value = 130560,/* ((3840x2176)/256) x 4 */
 	},
 	{
 		.key = "qcom,max-hq-mbs-per-frame",
