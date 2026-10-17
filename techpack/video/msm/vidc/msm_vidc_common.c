@@ -3328,9 +3328,6 @@ int msm_comm_update_dpb_bufreqs(struct msm_vidc_inst *inst)
 	req->buffer_size = max(req->buffer_size,
 			VENUS_BUFFER_SIZE(hfi_fmt, f->fmt.pix_mp.width,
 			f->fmt.pix_mp.height));
-	if (req->buffer_size < 12591128 && f->fmt.pix_mp.width >= 3840 &&
-	    f->fmt.pix_mp.height >= 2160)
-		req->buffer_size = 12595200;
 	req->buffer_size = ALIGN(req->buffer_size, 4096);
 
 	return rc;
@@ -3887,9 +3884,6 @@ static int set_dpb_only_buffers(struct msm_vidc_inst *inst,
 	num_buffers = dpb.buffer_count_actual;
 	buffer_size = dpb.buffer_size;
 	f = &inst->fmts[OUTPUT_PORT].v4l2_fmt;
-	if (buffer_size < 12591128 && f->fmt.pix_mp.width >= 3840 &&
-	    f->fmt.pix_mp.height >= 2160)
-		buffer_size = 12595200;
 	buffer_size = ALIGN(buffer_size, 4096);
 	s_vpr_h(inst->sid, "dpb: cnt = %d, size = %d\n",
 		num_buffers, buffer_size);
