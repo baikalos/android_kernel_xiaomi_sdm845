@@ -218,7 +218,7 @@ static inline bool is_valid_operating_rate(struct msm_vidc_inst *inst, s32 val)
 
 	cap = &inst->capability.cap[CAP_OPERATINGRATE];
 
-	if (((val >> 16) < cap->min || (val >> 16) > cap->max) &&
+	if ((val >> 16) < cap->min &&
 		val != INT_MAX) {
 		s_vpr_e(inst->sid,
 			"Unsupported operating rate %d min %d max %d\n",

@@ -944,15 +944,18 @@ int msm_vdec_s_ctrl(struct msm_vidc_inst *inst, struct v4l2_ctrl *ctrl)
 		 * flag. When switch from TURBO to normal, need not wait for
 		 * next qbuf to scale down the resources.
 		 */
-		if ((inst->flags & VIDC_TURBO) && (ctrl->val != INT_MAX)) {
+		if ((inst->flags & VIDC_TURBO) &&
+			(ctrl->val != INT_MAX && (ctrl->val >> 16) < 480)) {
 			inst->flags &= ~VIDC_TURBO;
 			msm_comm_reset_clocks_and_bus(inst);
 		}
 		inst->flags &= ~VIDC_TURBO;
-		if (ctrl->val == INT_MAX)
+		if (ctrl->val == INT_MAX || (ctrl->val >> 16) >= 480) {
 			inst->flags |= VIDC_TURBO;
-		else
+			inst->clk_data.operating_rate = 480 << 16;
+		} else {
 			inst->clk_data.operating_rate = ctrl->val;
+		}
 		break;
 	case V4L2_CID_MPEG_VIDC_VIDEO_LOWLATENCY_MODE:
 		inst->clk_data.low_latency_mode = !!ctrl->val;

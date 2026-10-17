@@ -211,7 +211,7 @@ static struct msm_vidc_codec_capability lito_capabilities_v0[] = {
 	/* ((3840x2176)/256)@60fps */
 	{CAP_MBS_PER_SECOND, DOMAINS_ALL, CODECS_ALL, 36, 1958400, 1, 1958400},
 	{CAP_FRAMERATE, DOMAINS_ALL, CODECS_ALL, 1, 480, 1, 30},
-	{CAP_OPERATINGRATE, DOMAINS_ALL, CODECS_ALL, 1, 480, 1, 30},
+	{CAP_OPERATINGRATE, DOMAINS_ALL, CODECS_ALL, 1, INT_MAX, 1, 30},
 	{CAP_BITRATE, DOMAINS_ALL, CODECS_ALL, 1, 200000000, 1, 20000000},
 	{CAP_CABAC_BITRATE, ENC, H264, 1, 200000000, 1, 20000000},
 	{CAP_SCALE_X, ENC, CODECS_ALL, 8192, 65536, 1, 8192},
@@ -900,7 +900,7 @@ static struct msm_vidc_codec_capability sdm845_capabilities[] = {
 	/* {cap_type, domains, codecs, min, max, step_size, default_value,} */
 
 	/* operating rate (turbo/HFR), validated by is_valid_operating_rate */
-	{CAP_OPERATINGRATE, DOMAINS_ALL, CODECS_ALL, 1, 480, 1, 30},
+	{CAP_OPERATINGRATE, DOMAINS_ALL, CODECS_ALL, 1, INT_MAX, 1, 30},
 
 	/* ===== Decoder common (H264/HEVC/VP8) ===== */
 	{CAP_FRAME_WIDTH, DEC, H264|HEVC|VP8, 96, 4096, 1, 1920},
