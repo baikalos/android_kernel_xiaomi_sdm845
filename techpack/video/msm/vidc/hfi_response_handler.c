@@ -342,7 +342,7 @@ static int hfi_process_sess_evt_seq_changed(u32 device_id,
 			default:
 				s_vpr_e(sid, "%s: cmd: %#x not supported\n",
 					__func__, prop_id);
-				return -E2BIG;
+				break;
 			}
 			num_properties_changed--;
 		} while (num_properties_changed > 0);

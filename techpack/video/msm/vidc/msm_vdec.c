@@ -1435,8 +1435,20 @@ int msm_vdec_set_extradata(struct msm_vidc_inst *inst)
 	/* Enable Default Extradata */
 	msm_comm_set_index_extradata(inst,
 		MSM_VIDC_EXTRADATA_OUTPUT_CROP, 0x1);
-	msm_comm_set_extradata(inst,
-		HFI_PROPERTY_PARAM_VDEC_INTERLACE_VIDEO_EXTRADATA, 0x1);
+	/*
+	 * HFI_PROPERTY_PARAM_VDEC_INTERLACE_VIDEO_EXTRADATA is only for
+	 * interlaced formats (e.g. MPEG-2, H.264 interlaced).
+	 * On AR50 (SDM845), enabling it causes the Venus firmware to append
+	 * a 24-byte in-band footer and flush D-cache past the buffer boundary,
+	 * causing SMMU page faults and SYS_ERROR 17 on progressive streams
+	 * (e.g. VP9 Profile 2 10-bit HDR on YouTube).
+	 */
+	if (codec != V4L2_PIX_FMT_VP9 && codec != V4L2_PIX_FMT_VP8 &&
+	    codec != V4L2_PIX_FMT_HEVC &&
+	    inst->core->platform_data->vpu_ver != VPU_VERSION_AR50) {
+		msm_comm_set_extradata(inst,
+			HFI_PROPERTY_PARAM_VDEC_INTERLACE_VIDEO_EXTRADATA, 0x1);
+	}
 	msm_comm_set_extradata(inst, display_info, 0x1);
 
 	if (codec == V4L2_PIX_FMT_VP9 || codec == V4L2_PIX_FMT_HEVC) {

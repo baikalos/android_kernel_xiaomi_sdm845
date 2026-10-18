@@ -9,10 +9,13 @@
 #include "msm_vidc_debug.h"
 #include "vidc_hfi_api.h"
 #include <linux/of_fdt.h>
+#include <linux/module.h>
+#include <linux/moduleparam.h>
 
-int msm_vidc_debug = VIDC_ERR | VIDC_PRINTK |
+int msm_vidc_debug = VIDC_ERR | VIDC_HIGH | VIDC_PRINTK |
 	FW_ERROR | FW_FATAL | FW_FTRACE;
 EXPORT_SYMBOL(msm_vidc_debug);
+module_param_named(msm_vidc_debug, msm_vidc_debug, int, 0644);
 
 bool msm_vidc_lossless_encode = !true;
 EXPORT_SYMBOL(msm_vidc_lossless_encode);

@@ -5037,7 +5037,7 @@ int msm_comm_try_get_bufreqs(struct msm_vidc_inst *inst)
 					sizeof(struct hal_buffer_requirements));
 			} else if (req.buffer_type == HAL_BUFFER_OUTPUT &&
 				   is_secondary_output_mode(inst)) {
-				curr_req->buffer_size = max(curr_req->buffer_size, req.buffer_size);
+				curr_req->buffer_size = req.buffer_size;
 			}
 		}
 	}
