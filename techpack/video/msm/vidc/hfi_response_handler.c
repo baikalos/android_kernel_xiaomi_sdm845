@@ -21,6 +21,7 @@ static enum vidc_status hfi_map_err_status(u32 hfi_err)
 	switch (hfi_err) {
 	case HFI_ERR_NONE:
 	case HFI_ERR_SESSION_SAME_STATE_OPERATION:
+	case 0x1017:
 		vidc_err = VIDC_ERR_NONE;
 		break;
 	case HFI_ERR_SYS_FATAL:
@@ -422,10 +423,18 @@ static int hfi_process_session_error(u32 device_id,
 	/* Ignore below errors */
 	case HFI_ERR_SESSION_INVALID_SCALE_FACTOR:
 	case HFI_ERR_SESSION_UPSCALE_NOT_SUPPORTED:
-		s_vpr_h(sid, "Non Fatal: HFI_EVENT_SESSION_ERROR\n");
+	case HFI_ERR_SESSION_UNSUPPORT_BUFFERTYPE:
+	case HFI_ERR_SESSION_UNSUPPORTED_SETTING:
+	case 0x1017:
+		s_vpr_h(sid, "Non Fatal: HFI_EVENT_SESSION_ERROR (data1 %#x, data2 %#x)\n",
+			pkt->event_data1, pkt->event_data2);
 		info->response_type = HAL_RESPONSE_UNUSED;
 		break;
 	default:
+		if (pkt->event_data2 == HFI_CMD_SESSION_CONTINUE) {
+			info->response_type = HAL_RESPONSE_UNUSED;
+			break;
+		}
 		s_vpr_e(sid, "%s: data1 %#x, data2 %#x\n", __func__,
 			pkt->event_data1, pkt->event_data2);
 		info->response_type = HAL_SESSION_ERROR;
