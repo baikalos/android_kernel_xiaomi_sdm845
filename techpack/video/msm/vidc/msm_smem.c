@@ -17,6 +17,23 @@
 #include "msm_vidc_resources.h"
 
 
+static struct page *venus_guard_page;
+static DEFINE_MUTEX(guard_page_lock);
+
+static struct page *msm_vidc_get_guard_page(void)
+{
+	if (unlikely(!venus_guard_page)) {
+		mutex_lock(&guard_page_lock);
+		if (!venus_guard_page) {
+			venus_guard_page = alloc_page(GFP_KERNEL | __GFP_ZERO);
+			if (!venus_guard_page)
+				pr_err("msm_vidc: failed to allocate guard page\n");
+		}
+		mutex_unlock(&guard_page_lock);
+	}
+	return venus_guard_page;
+}
+
 static int msm_dma_get_device_address(struct dma_buf *dbuf, unsigned long align,
 	dma_addr_t *iova, unsigned long *buffer_size,
 	unsigned long flags, enum hal_buffer buffer_type,
@@ -106,6 +123,38 @@ static int msm_dma_get_device_address(struct dma_buf *dbuf, unsigned long align,
 		mapping_info->attach = attach;
 		mapping_info->buf = dbuf;
 		mapping_info->cb_info = (void *)cb;
+		mapping_info->guard_iova = 0;
+
+		/*
+		 * On AR50 (SDM845), Venus firmware appends a 24-byte in-band
+		 * footer at (Plane 0 Base + frame_size) when extradata is enabled.
+		 * If frame_size == buffer_size, the footer lands in the next
+		 * page, causing an SMMU context fault (FSR=0x40000402).
+		 * Map a guard page immediately past Plane 0 to safely absorb
+		 * the 24-byte write and D-cache flush.
+		 */
+		if (session_type == MSM_VIDC_DECODER &&
+		    (buffer_type == HAL_BUFFER_OUTPUT || buffer_type == HAL_BUFFER_OUTPUT2) &&
+		    !(flags & SMEM_SECURE) && cb->domain) {
+			struct page *gp = msm_vidc_get_guard_page();
+
+			if (gp) {
+			dma_addr_t guard_iova = *iova + *buffer_size;
+			int map_err = iommu_map(cb->domain, guard_iova,
+						page_to_phys(gp),
+						PAGE_SIZE,
+						IOMMU_READ | IOMMU_WRITE);
+
+			if (!map_err) {
+				mapping_info->guard_iova = guard_iova;
+				d_vpr_h("%s: mapped guard page at iova 0x%pa for buf %pK\n",
+					__func__, &guard_iova, dbuf);
+			} else {
+				d_vpr_e("%s: failed to map guard page at 0x%pa: %d\n",
+					__func__, &guard_iova, map_err);
+			}
+			}
+		}
 
 		trace_msm_smem_buffer_iommu_op_end("MAP", 0, 0,
 			align, *iova, *buffer_size);
@@ -150,6 +199,10 @@ static int msm_dma_put_device_address(u32 flags,
 	buffer_size = table->sgl->dma_length;
 	trace_msm_smem_buffer_iommu_op_start("UNMAP", 0, 0,
 			0, iova, buffer_size);
+	if (mapping_info->guard_iova && mapping_info->domain) {
+		iommu_unmap(mapping_info->domain, mapping_info->guard_iova, PAGE_SIZE);
+		mapping_info->guard_iova = 0;
+	}
 	dma_buf_unmap_attachment(mapping_info->attach,
 		mapping_info->table, DMA_BIDIRECTIONAL);
 	dma_buf_detach(mapping_info->buf, mapping_info->attach);

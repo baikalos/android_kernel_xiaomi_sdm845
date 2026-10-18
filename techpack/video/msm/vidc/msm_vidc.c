@@ -799,12 +799,28 @@ static inline int start_streaming(struct msm_vidc_inst *inst)
 	s_vpr_h(inst->sid, "%s: inst %pK\n", __func__, inst);
 	hdev = inst->core->device;
 
+	f = &inst->fmts[OUTPUT_PORT].v4l2_fmt;
+	if (inst->bit_depth == MSM_VIDC_BIT_DEPTH_10) {
+		if (f->fmt.pix_mp.pixelformat == V4L2_PIX_FMT_NV12_UBWC)
+			f->fmt.pix_mp.pixelformat = V4L2_PIX_FMT_NV12_TP10_UBWC;
+		else if (f->fmt.pix_mp.pixelformat == V4L2_PIX_FMT_NV12)
+			f->fmt.pix_mp.pixelformat = V4L2_PIX_FMT_SDE_Y_CBCR_H2V2_P010_VENUS;
+		f->fmt.pix_mp.plane_fmt[0].sizeimage =
+			max_t(u32, f->fmt.pix_mp.plane_fmt[0].sizeimage,
+				msm_vidc_calculate_dec_output_frame_size(inst));
+		if (f->fmt.pix_mp.num_planes > 1) {
+			f->fmt.pix_mp.plane_fmt[1].sizeimage =
+				msm_vidc_calculate_dec_output_extra_size(inst);
+		}
+		inst->clk_data.opb_fourcc = f->fmt.pix_mp.pixelformat;
+		msm_vdec_update_stream_output_mode(inst);
+	}
+
 	rc = msm_vidc_set_properties(inst);
 	if (rc) {
 		s_vpr_e(inst->sid, "%s: set props failed\n", __func__);
 		goto fail_start;
 	}
-
 	b.buffer_type = HFI_BUFFER_OUTPUT;
 	if (inst->session_type == MSM_VIDC_DECODER &&
 		is_secondary_output_mode(inst)) {
@@ -861,20 +877,35 @@ static inline int start_streaming(struct msm_vidc_inst *inst)
 		goto fail_start;
 	}
 
-	f = &inst->fmts[OUTPUT_PORT].v4l2_fmt;
-	b.buffer_size = f->fmt.pix_mp.plane_fmt[0].sizeimage;
-	if (b.buffer_type == HFI_BUFFER_OUTPUT) {
-		b.buffer_size = max_t(u32, b.buffer_size,
-			inst->buff_req.buffer[HAL_BUFFER_OUTPUT].buffer_size);
-	} else if (b.buffer_type == HFI_BUFFER_OUTPUT2) {
-		b.buffer_size = max_t(u32, b.buffer_size,
-			inst->buff_req.buffer[HAL_BUFFER_OUTPUT2].buffer_size);
-	}
-	rc = call_hfi_op(hdev, session_set_property,
-			inst->session, HFI_PROPERTY_PARAM_BUFFER_SIZE_MINIMUM,
-			&b, sizeof(b));
+	if (inst->session_type == MSM_VIDC_DECODER && is_secondary_output_mode(inst)) {
+		b.buffer_type = HFI_BUFFER_OUTPUT;
+		b.buffer_size = max_t(u32, inst->buff_req.buffer[HAL_BUFFER_OUTPUT].buffer_size,
+				msm_vidc_calculate_dec_output_frame_size(inst));
+		rc = call_hfi_op(hdev, session_set_property,
+				inst->session, HFI_PROPERTY_PARAM_BUFFER_SIZE_MINIMUM,
+				&b, sizeof(b));
+		if (rc)
+			s_vpr_e(inst->sid, "set min buf size output (dpb) failed: %d\n", rc);
 
-	/* Verify if buffer counts are correct */
+		b.buffer_type = HFI_BUFFER_OUTPUT2;
+		b.buffer_size = max_t(u32, f->fmt.pix_mp.plane_fmt[0].sizeimage,
+				inst->buff_req.buffer[HAL_BUFFER_OUTPUT2].buffer_size);
+		rc = call_hfi_op(hdev, session_set_property,
+				inst->session, HFI_PROPERTY_PARAM_BUFFER_SIZE_MINIMUM,
+				&b, sizeof(b));
+		if (rc)
+			s_vpr_e(inst->sid, "set min buf size output2 (opb) failed: %d\n", rc);
+	} else {
+		b.buffer_type = HFI_BUFFER_OUTPUT;
+		b.buffer_size = max_t(u32, f->fmt.pix_mp.plane_fmt[0].sizeimage,
+				inst->buff_req.buffer[HAL_BUFFER_OUTPUT].buffer_size);
+		rc = call_hfi_op(hdev, session_set_property,
+				inst->session, HFI_PROPERTY_PARAM_BUFFER_SIZE_MINIMUM,
+				&b, sizeof(b));
+		if (rc)
+			s_vpr_e(inst->sid, "set min buf size output failed: %d\n", rc);
+	}
+
 	rc = msm_vidc_verify_buffer_counts(inst);
 	if (rc) {
 		s_vpr_e(inst->sid,

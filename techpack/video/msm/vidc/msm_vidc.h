@@ -61,6 +61,7 @@ struct dma_mapping_info {
 	struct dma_buf_attachment *attach;
 	struct dma_buf *buf;
 	void *cb_info;
+	dma_addr_t guard_iova;
 };
 
 struct msm_smem {
