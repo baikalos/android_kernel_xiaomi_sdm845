@@ -864,11 +864,15 @@ static inline int start_streaming(struct msm_vidc_inst *inst)
 	f = &inst->fmts[OUTPUT_PORT].v4l2_fmt;
 	b.buffer_size = f->fmt.pix_mp.plane_fmt[0].sizeimage;
 	if (b.buffer_type == HFI_BUFFER_OUTPUT) {
-		b.buffer_size = max_t(u32, b.buffer_size,
-			inst->buff_req.buffer[HAL_BUFFER_OUTPUT].buffer_size);
+		struct hal_buffer_requirements *req =
+			get_buff_req_buffer(inst, HAL_BUFFER_OUTPUT);
+		if (req)
+			b.buffer_size = max_t(u32, b.buffer_size, req->buffer_size);
 	} else if (b.buffer_type == HFI_BUFFER_OUTPUT2) {
-		b.buffer_size = max_t(u32, b.buffer_size,
-			inst->buff_req.buffer[HAL_BUFFER_OUTPUT2].buffer_size);
+		struct hal_buffer_requirements *req =
+			get_buff_req_buffer(inst, HAL_BUFFER_OUTPUT2);
+		if (req)
+			b.buffer_size = max_t(u32, b.buffer_size, req->buffer_size);
 	}
 	rc = call_hfi_op(hdev, session_set_property,
 			inst->session, HFI_PROPERTY_PARAM_BUFFER_SIZE_MINIMUM,

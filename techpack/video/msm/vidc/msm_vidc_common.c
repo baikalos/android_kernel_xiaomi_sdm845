@@ -3328,7 +3328,12 @@ int msm_comm_update_dpb_bufreqs(struct msm_vidc_inst *inst)
 	req->buffer_size = max(req->buffer_size,
 			VENUS_BUFFER_SIZE(hfi_fmt, f->fmt.pix_mp.width,
 			f->fmt.pix_mp.height));
-	req->buffer_size = ALIGN(req->buffer_size, 4096);
+	if (inst->core && inst->core->platform_data &&
+	    (inst->core->platform_data->vpu_ver == VPU_VERSION_AR50 ||
+	     inst->core->platform_data->vpu_ver == VPU_VERSION_AR50_LITE))
+		req->buffer_size = ALIGN(req->buffer_size + 256, SZ_4K);
+	else
+		req->buffer_size = ALIGN(req->buffer_size, 4096);
 
 	return rc;
 }
@@ -5035,9 +5040,10 @@ int msm_comm_try_get_bufreqs(struct msm_vidc_inst *inst)
 			if (is_internal_buffer(req.buffer_type)) {
 				memcpy(curr_req, &req,
 					sizeof(struct hal_buffer_requirements));
-			} else if (req.buffer_type == HAL_BUFFER_OUTPUT &&
-				   is_secondary_output_mode(inst)) {
-				curr_req->buffer_size = req.buffer_size;
+			} else if (req.buffer_type == HAL_BUFFER_OUTPUT) {
+				curr_req->buffer_size = ALIGN(max(curr_req->buffer_size, req.buffer_size), SZ_4K);
+			} else if (req.buffer_type == HAL_BUFFER_OUTPUT2) {
+				curr_req->buffer_size = ALIGN(max(curr_req->buffer_size, req.buffer_size), SZ_4K);
 			}
 		}
 	}

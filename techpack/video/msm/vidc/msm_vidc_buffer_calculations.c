@@ -986,11 +986,29 @@ u32 msm_vidc_calculate_dec_output_frame_size(struct msm_vidc_inst *inst)
 	u32 hfi_fmt, size;
 	struct v4l2_format *f;
 
+	if (!inst)
+		return 0;
+
 	f = &inst->fmts[OUTPUT_PORT].v4l2_fmt;
 	hfi_fmt = msm_comm_convert_color_fmt(f->fmt.pix_mp.pixelformat,
 					inst->sid);
 	size = VENUS_BUFFER_SIZE(hfi_fmt, f->fmt.pix_mp.width,
 			f->fmt.pix_mp.height);
+
+	if (inst->core && inst->core->platform_data &&
+	    (inst->core->platform_data->vpu_ver == VPU_VERSION_AR50 ||
+	     inst->core->platform_data->vpu_ver == VPU_VERSION_AR50_LITE)) {
+		/*
+		 * On AR50 (Venus 4.x/5.x), firmware appends an in-band footer (24 bytes)
+		 * at Plane 0 when extradata is enabled. If size is an exact multiple
+		 * of 4KB (e.g. 585728 for 854x480 NV12, 4210688 for 1080p TP10),
+		 * the firmware calculates default_size as VENUS_BUFFER_SIZE + 24 and rejects
+		 * HFI_PROPERTY_PARAM_BUFFER_SIZE_MINIMUM and SESSION_CONTINUE.
+		 * Align size + 256 to page boundary so buffer accommodates the footer.
+		 */
+		size = ALIGN(size + 256, SZ_4K);
+	}
+
 	return size;
 }
 
