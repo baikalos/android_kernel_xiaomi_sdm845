@@ -587,17 +587,6 @@ int msm_vdec_s_fmt(struct msm_vidc_inst *inst, struct v4l2_format *f)
 		strlcpy(fmt->description, fmt_desc->description,
 			sizeof(fmt->description));
 
-		if (inst->bit_depth == MSM_VIDC_BIT_DEPTH_10) {
-			if (f->fmt.pix_mp.pixelformat == V4L2_PIX_FMT_NV12_UBWC)
-				f->fmt.pix_mp.pixelformat = V4L2_PIX_FMT_NV12_TP10_UBWC;
-			else if (f->fmt.pix_mp.pixelformat == V4L2_PIX_FMT_NV12)
-				f->fmt.pix_mp.pixelformat = V4L2_PIX_FMT_SDE_Y_CBCR_H2V2_P010_VENUS;
-		} else if ((f->fmt.pix_mp.pixelformat == V4L2_PIX_FMT_NV12_TP10_UBWC) ||
-			   (f->fmt.pix_mp.pixelformat == V4L2_PIX_FMT_SDE_Y_CBCR_H2V2_P010_VENUS)) {
-			inst->bit_depth = MSM_VIDC_BIT_DEPTH_10;
-		} else {
-			inst->bit_depth = MSM_VIDC_BIT_DEPTH_8;
-		}
 		inst->clk_data.opb_fourcc = f->fmt.pix_mp.pixelformat;
 
 		fmt->v4l2_fmt.type = f->type;
@@ -617,6 +606,13 @@ int msm_vdec_s_fmt(struct msm_vidc_inst *inst, struct v4l2_format *f)
 			VENUS_Y_STRIDE(color_format, f->fmt.pix_mp.width);
 		mplane->plane_fmt[0].reserved[0] =
 			VENUS_Y_SCANLINES(color_format, f->fmt.pix_mp.height);
+		inst->bit_depth = MSM_VIDC_BIT_DEPTH_8;
+		if ((f->fmt.pix_mp.pixelformat ==
+			V4L2_PIX_FMT_NV12_TP10_UBWC) ||
+			(f->fmt.pix_mp.pixelformat ==
+			V4L2_PIX_FMT_SDE_Y_CBCR_H2V2_P010_VENUS)) {
+			inst->bit_depth = MSM_VIDC_BIT_DEPTH_10;
+		}
 
 		rc = msm_vidc_check_session_supported(inst);
 		if (rc) {
@@ -878,9 +874,6 @@ int msm_vdec_s_ctrl(struct msm_vidc_inst *inst, struct v4l2_ctrl *ctrl)
 	case V4L2_CID_MPEG_VIDC_VIDEO_MPEG2_PROFILE:
 		inst->profile = msm_comm_v4l2_to_hfi(ctrl->id, ctrl->val,
 							inst->sid);
-		if (inst->profile == HFI_VP9_PROFILE_P2_10B ||
-		    inst->profile == HFI_HEVC_PROFILE_MAIN10)
-			inst->bit_depth = MSM_VIDC_BIT_DEPTH_10;
 		break;
 	case V4L2_CID_MPEG_VIDEO_H264_LEVEL:
 	case V4L2_CID_MPEG_VIDEO_HEVC_LEVEL:
@@ -1439,22 +1432,20 @@ int msm_vdec_set_extradata(struct msm_vidc_inst *inst)
 		break;
 	}
 
-	/*
-	 * Enable Default Extradata.
-	 * MSM_VIDC_EXTRADATA_OUTPUT_CROP is critical for userspace Codec2 to
-	 * receive exact crop rectangles. Without it, Codec2 defaults to 128x128
-	 * port dimensions, heavily cropping video playback.
-	 */
+	/* Enable Default Extradata */
 	msm_comm_set_index_extradata(inst,
 		MSM_VIDC_EXTRADATA_OUTPUT_CROP, 0x1);
-
 	/*
 	 * HFI_PROPERTY_PARAM_VDEC_INTERLACE_VIDEO_EXTRADATA is only for
 	 * interlaced formats (e.g. MPEG-2, H.264 interlaced).
-	 * Progressive formats do not need it.
+	 * On AR50 (SDM845), enabling it causes the Venus firmware to append
+	 * a 24-byte in-band footer and flush D-cache past the buffer boundary,
+	 * causing SMMU page faults and SYS_ERROR 17 on progressive streams
+	 * (e.g. VP9 Profile 2 10-bit HDR on YouTube).
 	 */
 	if (codec != V4L2_PIX_FMT_VP9 && codec != V4L2_PIX_FMT_VP8 &&
-	    codec != V4L2_PIX_FMT_HEVC) {
+	    codec != V4L2_PIX_FMT_HEVC &&
+	    inst->core->platform_data->vpu_ver != VPU_VERSION_AR50) {
 		msm_comm_set_extradata(inst,
 			HFI_PROPERTY_PARAM_VDEC_INTERLACE_VIDEO_EXTRADATA, 0x1);
 	}
@@ -1474,13 +1465,21 @@ int msm_vdec_set_extradata(struct msm_vidc_inst *inst)
 
 	msm_comm_set_extradata(inst,
 		HFI_PROPERTY_PARAM_VDEC_NUM_CONCEALED_MB, 0x1);
-
 	if (codec == V4L2_PIX_FMT_HEVC) {
-		msm_comm_set_extradata(inst,
-			HFI_PROPERTY_PARAM_VDEC_MASTER_DISP_COL_SEI_EXTRADATA,
-			0x1);
-		msm_comm_set_extradata(inst,
-			HFI_PROPERTY_PARAM_VDEC_CLL_SEI_EXTRADATA, 0x1);
+		/*
+		 * HFI_PROPERTY_PARAM_VDEC_MASTER_DISP_COL_SEI_EXTRADATA and
+		 * HFI_PROPERTY_PARAM_VDEC_CLL_SEI_EXTRADATA are not
+		 * supported by the venus 4.x/5.x (AR50) firmware;
+		 * sending them makes the firmware return SESSION_ERROR
+		 * and kill the session.
+		 */
+		if (inst->core->platform_data->vpu_ver != VPU_VERSION_AR50) {
+			msm_comm_set_extradata(inst,
+				HFI_PROPERTY_PARAM_VDEC_MASTER_DISP_COL_SEI_EXTRADATA,
+				0x1);
+			msm_comm_set_extradata(inst,
+				HFI_PROPERTY_PARAM_VDEC_CLL_SEI_EXTRADATA, 0x1);
+		}
 		msm_comm_set_extradata(inst,
 			HFI_PROPERTY_PARAM_VDEC_STREAM_USERDATA_EXTRADATA,
 			0x1);

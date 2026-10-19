@@ -23,5 +23,4 @@ int msm_vdec_s_ctrl(struct msm_vidc_inst *inst,
 int msm_vdec_g_ctrl(struct msm_vidc_inst *inst,
 		struct v4l2_ctrl *ctrl);
 int msm_vdec_set_properties(struct msm_vidc_inst *inst);
-int msm_vdec_update_stream_output_mode(struct msm_vidc_inst *inst);
 #endif

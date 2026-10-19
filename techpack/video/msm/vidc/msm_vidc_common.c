@@ -17,7 +17,6 @@
 #include "msm_vidc_clocks.h"
 #include "msm_cvp_internal.h"
 #include "msm_vidc_buffer_calculations.h"
-#include "msm_vdec.h"
 
 #define IS_ALREADY_IN_STATE(__p, __d) (\
 	(__p >= __d)\
@@ -1842,20 +1841,6 @@ static void handle_event_change(enum hal_command_response cmd, void *data)
 	fmt = &inst->fmts[OUTPUT_PORT];
 	fmt->v4l2_fmt.fmt.pix_mp.height = event_notify->height;
 	fmt->v4l2_fmt.fmt.pix_mp.width = event_notify->width;
-	if (inst->bit_depth == MSM_VIDC_BIT_DEPTH_10) {
-		if (fmt->v4l2_fmt.fmt.pix_mp.pixelformat == V4L2_PIX_FMT_NV12_UBWC)
-			fmt->v4l2_fmt.fmt.pix_mp.pixelformat = V4L2_PIX_FMT_NV12_TP10_UBWC;
-		else if (fmt->v4l2_fmt.fmt.pix_mp.pixelformat == V4L2_PIX_FMT_NV12)
-			fmt->v4l2_fmt.fmt.pix_mp.pixelformat = V4L2_PIX_FMT_SDE_Y_CBCR_H2V2_P010_VENUS;
-	}
-	fmt->v4l2_fmt.fmt.pix_mp.plane_fmt[0].sizeimage =
-		msm_vidc_calculate_dec_output_frame_size(inst);
-	if (fmt->v4l2_fmt.fmt.pix_mp.num_planes > 1) {
-		fmt->v4l2_fmt.fmt.pix_mp.plane_fmt[1].sizeimage =
-			msm_vidc_calculate_dec_output_extra_size(inst);
-	}
-	inst->clk_data.opb_fourcc = fmt->v4l2_fmt.fmt.pix_mp.pixelformat;
-	msm_vdec_update_stream_output_mode(inst);
 	mutex_unlock(&inst->lock);
 
 	if (event == V4L2_EVENT_SEQ_CHANGED_INSUFFICIENT) {
@@ -4446,11 +4431,6 @@ static void populate_frame_data(struct vidc_frame_data *data,
 	do_div(time_usec, NSEC_PER_USEC);
 
 	data->alloc_len = vb->planes[0].length;
-	if (vb->type == OUTPUT_MPLANE) {
-		if (inst->buff_req.buffer[HAL_BUFFER_OUTPUT].buffer_size)
-			data->alloc_len = max(data->alloc_len,
-				inst->buff_req.buffer[HAL_BUFFER_OUTPUT].buffer_size);
-	}
 	data->device_addr = mbuf->smem[0].device_addr;
 	data->timestamp = time_usec;
 	data->flags = 0;
@@ -5055,10 +5035,9 @@ int msm_comm_try_get_bufreqs(struct msm_vidc_inst *inst)
 			if (is_internal_buffer(req.buffer_type)) {
 				memcpy(curr_req, &req,
 					sizeof(struct hal_buffer_requirements));
-			} else if (req.buffer_type == HAL_BUFFER_OUTPUT) {
-				curr_req->buffer_size = max(curr_req->buffer_size, req.buffer_size);
-			} else if (req.buffer_type == HAL_BUFFER_OUTPUT2) {
-				curr_req->buffer_size = max(curr_req->buffer_size, req.buffer_size);
+			} else if (req.buffer_type == HAL_BUFFER_OUTPUT &&
+				   is_secondary_output_mode(inst)) {
+				curr_req->buffer_size = req.buffer_size;
 			}
 		}
 	}
@@ -6745,12 +6724,9 @@ bool msm_comm_compare_device_plane(u32 sid, struct msm_vidc_buffer *mbuf,
 		return false;
 	}
 
-	if (mbuf->vvb.vb2_buf.type == type) {
-		if (i > 0 && planes[i] == 0)
-			return true;
-		if (mbuf->smem[i].device_addr == planes[i])
-			return true;
-	}
+	if (mbuf->vvb.vb2_buf.type == type &&
+		mbuf->smem[i].device_addr == planes[i])
+		return true;
 
 	return false;
 }
@@ -7512,9 +7488,6 @@ int msm_comm_set_index_extradata(struct msm_vidc_inst *inst,
 	struct hfi_index_extradata_config extradata;
 	struct hfi_device *hdev;
 
-	if (!value)
-		return 0;
-
 	hdev = inst->core->device;
 
 	extradata.index_extra_data_id = extradata_id;
@@ -7533,9 +7506,6 @@ int msm_comm_set_extradata(struct msm_vidc_inst *inst,
 	int rc = 0;
 	struct hfi_index_extradata_config extradata;
 	struct hfi_device *hdev;
-
-	if (!value)
-		return 0;
 
 	hdev = inst->core->device;
 
