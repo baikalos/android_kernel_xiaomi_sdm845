@@ -444,11 +444,15 @@ int smblib_set_charge_param(struct smb_charger *chg,
 		if (rc < 0)
 			return -EINVAL;
 	} else {
-		if (val_u > param->max_u || val_u < param->min_u) {
-			smblib_err(chg, "%s: %d is out of range [%d, %d]\n",
+		if (val_u > param->max_u || val_u < param->min_u)
+			smblib_dbg(chg, PR_MISC,
+				"%s: %d is out of range [%d, %d]\n",
 				param->name, val_u, param->min_u, param->max_u);
-			return -EINVAL;
-		}
+
+		if (val_u > param->max_u)
+			val_u = param->max_u;
+		if (val_u < param->min_u)
+			val_u = param->min_u;
 
 		val_raw = (val_u - param->min_u) / param->step_u;
 	}
