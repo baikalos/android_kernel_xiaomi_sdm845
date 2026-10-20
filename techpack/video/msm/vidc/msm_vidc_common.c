@@ -3891,11 +3891,6 @@ static int set_dpb_only_buffers(struct msm_vidc_inst *inst,
 	if (!b.buffer_type)
 		return -EINVAL;
 	b.buffer_size = buffer_size;
-	if (inst->core && inst->core->platform_data &&
-	    (inst->core->platform_data->vpu_ver == VPU_VERSION_AR50 ||
-	     inst->core->platform_data->vpu_ver == VPU_VERSION_AR50_LITE)) {
-		b.buffer_size = max_t(u32, b.buffer_size, buffer_size + 256);
-	}
 	rc = call_hfi_op(hdev, session_set_property,
 		inst->session, HFI_PROPERTY_PARAM_BUFFER_SIZE_MINIMUM,
 		&b, sizeof(b));
@@ -4462,6 +4457,8 @@ static void populate_frame_data(struct vidc_frame_data *data,
 	} else if (vb->type == OUTPUT_MPLANE) {
 		data->buffer_type = msm_comm_get_hal_output_buffer(inst);
 		f = &inst->fmts[OUTPUT_PORT].v4l2_fmt;
+		if (f && f->fmt.pix_mp.plane_fmt[0].sizeimage > data->alloc_len)
+			data->alloc_len = f->fmt.pix_mp.plane_fmt[0].sizeimage;
 	}
 
 	if (f && f->fmt.pix_mp.num_planes > 1) {
