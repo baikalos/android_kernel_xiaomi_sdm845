@@ -1840,6 +1840,8 @@ static void handle_event_change(enum hal_command_response cmd, void *data)
 	fmt = &inst->fmts[OUTPUT_PORT];
 	fmt->v4l2_fmt.fmt.pix_mp.height = event_notify->height;
 	fmt->v4l2_fmt.fmt.pix_mp.width = event_notify->width;
+	fmt->v4l2_fmt.fmt.pix_mp.plane_fmt[0].sizeimage =
+		msm_vidc_calculate_dec_output_frame_size(inst);
 	mutex_unlock(&inst->lock);
 
 	if (event == V4L2_EVENT_SEQ_CHANGED_INSUFFICIENT) {
@@ -3891,6 +3893,11 @@ static int set_dpb_only_buffers(struct msm_vidc_inst *inst,
 	if (!b.buffer_type)
 		return -EINVAL;
 	b.buffer_size = buffer_size;
+	if (inst->core && inst->core->platform_data &&
+	    (inst->core->platform_data->vpu_ver == VPU_VERSION_AR50 ||
+	     inst->core->platform_data->vpu_ver == VPU_VERSION_AR50_LITE)) {
+		b.buffer_size = max_t(u32, b.buffer_size, buffer_size + 256);
+	}
 	rc = call_hfi_op(hdev, session_set_property,
 		inst->session, HFI_PROPERTY_PARAM_BUFFER_SIZE_MINIMUM,
 		&b, sizeof(b));
@@ -4459,6 +4466,17 @@ static void populate_frame_data(struct vidc_frame_data *data,
 		f = &inst->fmts[OUTPUT_PORT].v4l2_fmt;
 		if (f && f->fmt.pix_mp.plane_fmt[0].sizeimage > data->alloc_len)
 			data->alloc_len = f->fmt.pix_mp.plane_fmt[0].sizeimage;
+		if (inst->core && inst->core->platform_data &&
+		    (inst->core->platform_data->vpu_ver == VPU_VERSION_AR50 ||
+		     inst->core->platform_data->vpu_ver == VPU_VERSION_AR50_LITE)) {
+			struct hal_buffer_requirements *req =
+				get_buff_req_buffer(inst, data->buffer_type);
+			if (req && req->buffer_size > data->alloc_len)
+				data->alloc_len = req->buffer_size;
+			if (f && (f->fmt.pix_mp.plane_fmt[0].sizeimage + 256) > data->alloc_len)
+				data->alloc_len = f->fmt.pix_mp.plane_fmt[0].sizeimage + 256;
+			data->alloc_len = ALIGN(data->alloc_len, 256);
+		}
 	}
 
 	if (f && f->fmt.pix_mp.num_planes > 1) {
@@ -5036,8 +5054,8 @@ int msm_comm_try_get_bufreqs(struct msm_vidc_inst *inst)
 			if (is_internal_buffer(req.buffer_type)) {
 				memcpy(curr_req, &req,
 					sizeof(struct hal_buffer_requirements));
-			} else if (req.buffer_type == HAL_BUFFER_OUTPUT &&
-				   is_secondary_output_mode(inst)) {
+			} else if (req.buffer_type == HAL_BUFFER_OUTPUT ||
+				   req.buffer_type == HAL_BUFFER_OUTPUT2) {
 				curr_req->buffer_size = req.buffer_size;
 			}
 		}

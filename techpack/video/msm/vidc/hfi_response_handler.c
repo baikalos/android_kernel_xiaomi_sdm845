@@ -268,8 +268,8 @@ static int hfi_process_sess_evt_seq_changed(u32 device_id,
 				buf_req = (struct hfi_buffer_requirements *)data_ptr;
 				if (!event_notify.fw_min_cnt)
 					event_notify.fw_min_cnt = buf_req->buffer_count_min;
-				s_vpr_h(sid, "Capture Count (buffreq min): %d\n",
-					buf_req->buffer_count_min);
+				s_vpr_h(sid, "Capture Count (buffreq min): %d, buf_size: %d\n",
+					buf_req->buffer_count_min, buf_req->buffer_size);
 				data_ptr +=
 					sizeof(struct hfi_buffer_requirements);
 				rem_size -=
