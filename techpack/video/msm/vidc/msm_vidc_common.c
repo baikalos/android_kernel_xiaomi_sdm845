@@ -1719,8 +1719,7 @@ static void handle_event_change(enum hal_command_response cmd, void *data)
 		extra_buff_count = msm_vidc_get_extra_buff_count(inst,
 				HAL_BUFFER_OUTPUT);
 		if (event_notify->fw_min_cnt &&
-		    (event_notify->fw_min_cnt > fmt->count_min ||
-		     (event_notify->fw_min_cnt + extra_buff_count) > fmt->count_actual)) {
+		     (event_notify->fw_min_cnt + extra_buff_count) > fmt->count_actual) {
 			s_vpr_h(inst->sid,
 				"seq: buffer requirement increased from min %d / act %d to %d (extra %d), promote to INSUFFICIENT\n",
 				fmt->count_min, fmt->count_actual, event_notify->fw_min_cnt, extra_buff_count);
