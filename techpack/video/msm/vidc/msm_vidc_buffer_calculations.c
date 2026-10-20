@@ -994,6 +994,9 @@ u32 msm_vidc_calculate_dec_output_frame_size(struct msm_vidc_inst *inst)
 					inst->sid);
 	size = VENUS_BUFFER_SIZE(hfi_fmt, f->fmt.pix_mp.width,
 			f->fmt.pix_mp.height);
+	if (hfi_fmt == COLOR_FMT_NV12_BPP10_UBWC || hfi_fmt == COLOR_FMT_P010_UBWC ||
+	    hfi_fmt == COLOR_FMT_P010)
+		size += 4096;
 	return size;
 }
 

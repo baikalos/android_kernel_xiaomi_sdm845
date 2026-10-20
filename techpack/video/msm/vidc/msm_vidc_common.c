@@ -1691,7 +1691,7 @@ static void handle_event_change(enum hal_command_response cmd, void *data)
 			event_fields_changed |= (inst->bit_depth !=
 				event_notify->bit_depth);
 		/* Check for change from hdr->non-hdr and vice versa */
-		if (codec == V4L2_PIX_FMT_HEVC &&
+		if ((codec == V4L2_PIX_FMT_HEVC || codec == V4L2_PIX_FMT_VP9) &&
 			((event_notify->colour_space == MSM_VIDC_BT2020 &&
 				inst->colour_space != MSM_VIDC_BT2020) ||
 			(event_notify->colour_space != MSM_VIDC_BT2020 &&
