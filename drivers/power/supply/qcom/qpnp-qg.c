@@ -2374,7 +2374,7 @@ static bool qg_cl_ok_to_begin(void *data)
 	return false;
 }
 
-#define DEFAULT_RECHARGE_SOC 95
+#define DEFAULT_RECHARGE_SOC 99
 static int qg_charge_full_update(struct qpnp_qg *chip)
 {
 	union power_supply_propval prop = {0, };
