@@ -874,12 +874,7 @@ static inline int start_streaming(struct msm_vidc_inst *inst)
 		if (req)
 			b.buffer_size = max_t(u32, b.buffer_size, req->buffer_size);
 	}
-	if (inst->core && inst->core->platform_data &&
-	    (inst->core->platform_data->vpu_ver == VPU_VERSION_AR50 ||
-	     inst->core->platform_data->vpu_ver == VPU_VERSION_AR50_LITE)) {
-		b.buffer_size = max_t(u32, b.buffer_size,
-			f->fmt.pix_mp.plane_fmt[0].sizeimage + 256);
-	}
+
 	rc = call_hfi_op(hdev, session_set_property,
 			inst->session, HFI_PROPERTY_PARAM_BUFFER_SIZE_MINIMUM,
 			&b, sizeof(b));
