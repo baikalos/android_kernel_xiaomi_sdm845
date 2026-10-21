@@ -1053,13 +1053,11 @@ int msm_vidc_smmu_fault_handler(struct iommu_domain *domain,
 		return -EINVAL;
 	}
 
-	if (core->smmu_fault_handled) {
-		if (core->resources.non_fatal_pagefaults) {
-			dprintk_ratelimit(VIDC_ERR,
-					"%s: non-fatal pagefault address: %lx\n",
-					__func__, iova);
-			return 0;
-		}
+	if (core->resources.non_fatal_pagefaults) {
+		dprintk_ratelimit(VIDC_ERR,
+				"%s: non-fatal pagefault address: %lx\n",
+				__func__, iova);
+		return 0;
 	}
 
 	d_vpr_e("%s: faulting address: %lx\n", __func__, iova);
