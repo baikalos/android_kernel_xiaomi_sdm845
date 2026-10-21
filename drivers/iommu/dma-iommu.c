@@ -31,6 +31,26 @@
 #include <linux/pci.h>
 #include <linux/scatterlist.h>
 #include <linux/vmalloc.h>
+#include <linux/of.h>
+
+static struct page *vidc_guard_page;
+
+static int __init iommu_vidc_guard_init(void)
+{
+	vidc_guard_page = alloc_page(GFP_KERNEL | __GFP_ZERO);
+	if (!vidc_guard_page)
+		pr_err("iommu: Failed to allocate VIDC guard page\n");
+	return 0;
+}
+core_initcall(iommu_vidc_guard_init);
+
+static inline bool is_vidc_ns_device(struct device *dev)
+{
+	return dev && dev->of_node &&
+		of_device_is_compatible(dev->of_node, "qcom,msm-vidc,context-bank") &&
+		!of_property_read_bool(dev->of_node, "qcom,secure-context-bank");
+}
+
 
 #define IOMMU_MAPPING_ERROR	0
 
@@ -848,6 +868,8 @@ int iommu_dma_map_sg(struct device *dev, struct scatterlist *sg,
 	struct iova_domain *iovad;
 	dma_addr_t iova;
 	size_t iova_len;
+	bool is_vidc = is_vidc_ns_device(dev);
+	size_t alloc_len;
 
 	domain = iommu_get_domain_for_dev(dev);
 	if (!domain)
@@ -856,8 +878,9 @@ int iommu_dma_map_sg(struct device *dev, struct scatterlist *sg,
 	iovad = &cookie->iovad;
 
 	iova_len = iommu_dma_prepare_map_sg(dev, iovad, sg, nents);
+	alloc_len = iova_len + (is_vidc ? PAGE_SIZE : 0);
 
-	iova = iommu_dma_alloc_iova(domain, iova_len, dma_get_mask(dev), dev);
+	iova = iommu_dma_alloc_iova(domain, alloc_len, dma_get_mask(dev), dev);
 	if (!iova)
 		goto out_restore_sg;
 
@@ -868,10 +891,23 @@ int iommu_dma_map_sg(struct device *dev, struct scatterlist *sg,
 	if (iommu_map_sg(domain, iova, sg, nents, prot) < iova_len)
 		goto out_free_iova;
 
+	if (is_vidc && vidc_guard_page) {
+		int map_err = iommu_map(domain, iova + iova_len,
+					page_to_phys(vidc_guard_page), PAGE_SIZE,
+					prot | IOMMU_READ | IOMMU_WRITE);
+		if (map_err) {
+			pr_err_ratelimited("%s: failed to map vidc guard page at %pad: %d\n",
+					   __func__, &(dma_addr_t){iova + iova_len}, map_err);
+			goto out_unmap_sg;
+		}
+	}
+
 	return iommu_dma_finalise_sg(dev, sg, nents, iova);
 
+out_unmap_sg:
+	iommu_unmap(domain, iova, iova_len);
 out_free_iova:
-	iommu_dma_free_iova(cookie, iova, iova_len);
+	iommu_dma_free_iova(cookie, iova, alloc_len);
 out_restore_sg:
 	iommu_dma_invalidate_sg(sg, nents);
 	return 0;
@@ -883,6 +919,8 @@ void iommu_dma_unmap_sg(struct device *dev, struct scatterlist *sg, int nents,
 	dma_addr_t start, end;
 	struct scatterlist *tmp;
 	int i;
+	bool is_vidc = is_vidc_ns_device(dev);
+
 	/*
 	 * The scatterlist segments are mapped into a single
 	 * contiguous IOVA allocation, so this is incredibly easy.
@@ -894,6 +932,9 @@ void iommu_dma_unmap_sg(struct device *dev, struct scatterlist *sg, int nents,
 		sg = tmp;
 	}
 	end = sg_dma_address(sg) + sg_dma_len(sg);
+	if (is_vidc)
+		end += PAGE_SIZE;
+
 	__iommu_dma_unmap(iommu_get_domain_for_dev(dev), start, end - start);
 }
 
