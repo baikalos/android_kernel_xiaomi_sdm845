@@ -7455,14 +7455,8 @@ int msm_comm_set_color_format_constraints(struct msm_vidc_inst *inst,
 	pconstraint->num_planes = pix_constraint->num_planes;
 	//set Y plan constraints
 	s_vpr_h(inst->sid, "Set Y plan constraints.\n");
-	if (inst->session_type == MSM_VIDC_DECODER) {
-		pconstraint->rg_plane_format[0].stride_multiples =
-				max_t(u32, VENUS_Y_STRIDE(hfi_fmt, 1),
-					pix_constraint->uv_buffer_alignment);
-	} else {
-		pconstraint->rg_plane_format[0].stride_multiples =
-				VENUS_Y_STRIDE(hfi_fmt, 1);
-	}
+	pconstraint->rg_plane_format[0].stride_multiples =
+			VENUS_Y_STRIDE(hfi_fmt, 1);
 	pconstraint->rg_plane_format[0].max_stride =
 			pix_constraint->y_max_stride;
 	pconstraint->rg_plane_format[0].min_plane_buffer_height_multiple =
