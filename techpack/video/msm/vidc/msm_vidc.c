@@ -505,6 +505,32 @@ int msm_vidc_dqbuf(void *instance, struct v4l2_buffer *b)
 		b->m.planes[i].reserved[MSM_VIDC_DATA_OFFSET] =
 					b->m.planes[i].data_offset;
 	}
+
+	if (b->type == OUTPUT_MPLANE && inst->session_type == MSM_VIDC_DECODER) {
+		u32 width = inst->fmts[OUTPUT_PORT].v4l2_fmt.fmt.pix_mp.width;
+		u32 height = inst->fmts[OUTPUT_PORT].v4l2_fmt.fmt.pix_mp.height;
+		u32 payload_size = 0;
+
+		if (!width || !height) {
+			width = inst->fmts[INPUT_PORT].v4l2_fmt.fmt.pix_mp.width;
+			height = inst->fmts[INPUT_PORT].v4l2_fmt.fmt.pix_mp.height;
+		}
+
+		if (inst->bit_depth == MSM_VIDC_BIT_DEPTH_10)
+			payload_size = width * height * 2;
+		else
+			payload_size = width * height * 3 / 2;
+
+		if (payload_size && b->m.planes[0].bytesused > payload_size) {
+			static int s_dqbuf_log = 0;
+			if (s_dqbuf_log < 5) {
+				pr_info("msm_vidc_dqbuf: clamp bytesused %u -> %u (%ux%u)\n",
+					b->m.planes[0].bytesused, payload_size, width, height);
+				s_dqbuf_log++;
+			}
+			b->m.planes[0].bytesused = payload_size;
+		}
+	}
 	if (b->type == OUTPUT_MPLANE) {
 		rc = msm_comm_fetch_input_tag(&inst->fbd_data, b->index,
 				&b->m.planes[0].reserved[MSM_VIDC_INPUT_TAG_1],
