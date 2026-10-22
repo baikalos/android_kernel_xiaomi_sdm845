@@ -521,15 +521,8 @@ int msm_vidc_dqbuf(void *instance, struct v4l2_buffer *b)
 		else
 			payload_size = width * height * 3 / 2;
 
-		if (payload_size && b->m.planes[0].bytesused > payload_size) {
-			static int s_dqbuf_log = 0;
-			if (s_dqbuf_log < 5) {
-				pr_info("msm_vidc_dqbuf: clamp bytesused %u -> %u (%ux%u)\n",
-					b->m.planes[0].bytesused, payload_size, width, height);
-				s_dqbuf_log++;
-			}
+		if (payload_size)
 			b->m.planes[0].bytesused = payload_size;
-		}
 	}
 	if (b->type == OUTPUT_MPLANE) {
 		rc = msm_comm_fetch_input_tag(&inst->fbd_data, b->index,

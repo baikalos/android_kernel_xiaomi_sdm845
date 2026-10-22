@@ -2714,15 +2714,8 @@ static void handle_fbd(enum hal_command_response cmd, void *data)
 		else
 			payload_size = width * height * 3 / 2;
 
-		if (payload_size && vb->planes[0].bytesused > payload_size) {
-			static int s_fbd_log = 0;
-			if (s_fbd_log < 5) {
-				pr_info("msm_vidc_fbd: clamp bytesused %u -> %u (%ux%u)\n",
-					vb->planes[0].bytesused, payload_size, width, height);
-				s_fbd_log++;
-			}
+		if (payload_size)
 			vb->planes[0].bytesused = payload_size;
-		}
 	}
 	if (vb->planes[0].bytesused > vb->planes[0].length)
 		s_vpr_l(inst->sid, "fbd:Overflow bytesused = %d; length = %d\n",
