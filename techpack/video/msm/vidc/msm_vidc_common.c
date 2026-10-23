@@ -2691,6 +2691,32 @@ static void handle_fbd(enum hal_command_response cmd, void *data)
 	if (fill_buf_done->flags1 & HAL_BUFFERFLAG_DROP_FRAME)
 		fill_buf_done->filled_len1 = 0;
 	vb->planes[0].bytesused = fill_buf_done->filled_len1;
+
+	/*
+	 * SDM845 Venus 4.x hardware decoder pads YUV slice height to 32-line macroblocks
+	 * (e.g. 2176 lines for 4K video, filled_len1 = 12,533,760 bytes).
+	 * Modern Android media frameworks and video convert benchmarks expect
+	 * bytesused to report the unpadded active frame payload size
+	 * (width * height * 3 / 2 = 12,441,600 bytes for 8-bit YUV 4:2:0).
+	 */
+	if (inst->session_type == MSM_VIDC_DECODER) {
+		u32 width = inst->fmts[OUTPUT_PORT].v4l2_fmt.fmt.pix_mp.width;
+		u32 height = inst->fmts[OUTPUT_PORT].v4l2_fmt.fmt.pix_mp.height;
+		u32 payload_size = 0;
+
+		if (!width || !height) {
+			width = inst->fmts[INPUT_PORT].v4l2_fmt.fmt.pix_mp.width;
+			height = inst->fmts[INPUT_PORT].v4l2_fmt.fmt.pix_mp.height;
+		}
+
+		if (inst->bit_depth == MSM_VIDC_BIT_DEPTH_10)
+			payload_size = width * height * 2;
+		else
+			payload_size = width * height * 3 / 2;
+
+		if (payload_size)
+			vb->planes[0].bytesused = payload_size;
+	}
 	if (vb->planes[0].bytesused > vb->planes[0].length)
 		s_vpr_l(inst->sid, "fbd:Overflow bytesused = %d; length = %d\n",
 			vb->planes[0].bytesused,
@@ -7456,8 +7482,7 @@ int msm_comm_set_color_format_constraints(struct msm_vidc_inst *inst,
 	//set Y plan constraints
 	s_vpr_h(inst->sid, "Set Y plan constraints.\n");
 	pconstraint->rg_plane_format[0].stride_multiples =
-			max_t(u32, VENUS_Y_STRIDE(hfi_fmt, 1),
-				pix_constraint->uv_buffer_alignment);
+			VENUS_Y_STRIDE(hfi_fmt, 1);
 	pconstraint->rg_plane_format[0].max_stride =
 			pix_constraint->y_max_stride;
 	pconstraint->rg_plane_format[0].min_plane_buffer_height_multiple =
